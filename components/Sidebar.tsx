@@ -138,7 +138,7 @@ export function Sidebar() {
         </a>
 
         {/* Social links */}
-        <div className="sidebar-section-label" style={{ marginTop: 12 }}>COMMUNITY</div>
+        <div className="sidebar-section-label sidebar-community-label">COMMUNITY</div>
         <a href={SOCIAL.x} target="_blank" rel="noopener noreferrer" className="sidebar-resource-link sidebar-social-link">
           <span className="sidebar-social-icon">
             {/* X (Twitter) icon */}
@@ -187,7 +187,7 @@ export function Sidebar() {
       {/* ── Mobile top bar ── */}
       <div className="mobile-topbar">
         <div className="mobile-topbar-logo">
-          <div className="sidebar-logo-icon" style={{ width: 24, height: 24, borderRadius: 6 }}>
+          <div className="sidebar-logo-icon mobile-topbar-logo-icon">
             <svg viewBox="0 0 24 24" fill="none" width="11" height="11">
               <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
                 stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
