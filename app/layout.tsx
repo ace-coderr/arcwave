@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Web3Provider } from "@/providers/Web3Provider";
 import { Analytics } from "@vercel/analytics/react";
+// @ts-ignore: CSS import side effects are handled by Next.js
 import "./globals.css";
 
 export const metadata: Metadata = {
