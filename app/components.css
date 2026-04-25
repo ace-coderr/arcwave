@@ -58,7 +58,7 @@
 .sidebar-network-id { font-size: 9px; color: #4a4f6a; font-family: 'DM Mono', monospace; }
 
 /* ── TopBar ──────────────────────────────────────────────────── */
-.topbar { height: 56px; background: rgba(6,8,16,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid #1e2235; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 30; }
+.topbar { height: 56px; background: rgba(6,8,16,0.85); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom: 1px solid #1e2235; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 30; }
 .topbar-breadcrumb { display: flex; align-items: center; gap: 6px; }
 .topbar-breadcrumb-parent { font-size: 13px; color: #4a4f6a; }
 .topbar-breadcrumb-sep { color: #4a4f6a; font-size: 12px; }
@@ -274,3 +274,307 @@
 /* ── Loading ─────────────────────────────────────────────────── */
 .loading-center { display: flex; align-items: center; justify-content: center; height: 60vh; }
 .page-spinner { width: 30px; height: 30px; border: 2px solid rgba(59,130,246,0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+/* ── Welcome social links ─────────────────────────────────────── */
+.welcome-social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.welcome-social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #8b90b0;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.welcome-social-link:hover {
+  color: #60a5fa;
+}
+
+/* ── Footer social icons ──────────────────────────────────────── */
+.footer-social {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #131626;
+  border: 1px solid #1e2235;
+  color: #4a4f6a;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.footer-social-link:hover {
+  background: #1a1d2e;
+  border-color: #2a2f4a;
+  color: #8b90b0;
+}
+
+/* ================================================================
+   MOBILE & SOCIAL ADDITIONS
+   Paste this at the bottom of your existing components.css file
+   ================================================================ */
+
+/* ── Social links ─────────────────────────────────────────────── */
+.sidebar-social-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-social-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b90b0;
+  flex-shrink: 0;
+}
+
+.sidebar-social-link:hover .sidebar-social-icon {
+  color: #f0f2ff;
+}
+
+/* ── Sidebar inner scroll ─────────────────────────────────────── */
+.sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 14px 10px;
+}
+
+/* ── Desktop sidebar (hidden on mobile) ─────────────────────────*/
+.sidebar-desktop {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Mobile topbar ────────────────────────────────────────────── */
+.mobile-topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: #0d0f1a;
+  border-bottom: 1px solid #1e2235;
+  z-index: 50;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-topbar-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #f0f2ff;
+  letter-spacing: -0.02em;
+}
+
+.mobile-topbar-name span {
+  color: #60a5fa;
+}
+
+.mobile-hamburger {
+  background: transparent;
+  border: 1px solid #1e2235;
+  border-radius: 8px;
+  color: #8b90b0;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.mobile-hamburger:hover {
+  background: #131626;
+  color: #f0f2ff;
+}
+
+/* ── Mobile overlay ───────────────────────────────────────────── */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 45;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+/* ── Mobile drawer ────────────────────────────────────────────── */
+.sidebar-mobile {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: -210px;
+  width: 210px;
+  height: 100vh;
+  z-index: 46;
+  transition: left 0.25s ease;
+  overflow: hidden;
+}
+
+.sidebar-mobile.open {
+  left: 0;
+}
+
+/* ── Responsive breakpoint ────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Show mobile topbar, hide desktop sidebar */
+  .mobile-topbar { display: flex; }
+  .sidebar-desktop { display: none; }
+  .sidebar-mobile { display: flex; flex-direction: column; }
+  .mobile-overlay { display: block; }
+
+  /* Shift main content down for topbar */
+  .layout-main {
+    margin-left: 0 !important;
+    padding-top: 52px;
+  }
+
+  /* Stack dashboard grid on mobile */
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Stack stats grid 2x2 on mobile */
+  .stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Simpler table on mobile — hide date column */
+  .table-col-headers {
+    grid-template-columns: 1fr 90px 80px 80px !important;
+  }
+  .table-row {
+    grid-template-columns: 1fr 90px 80px 80px !important;
+  }
+  .table-skeleton-row {
+    grid-template-columns: 1fr 90px 80px 80px !important;
+  }
+
+  /* Hide date and expiry columns on small screens */
+  .table-col-headers span:nth-child(4),
+  .table-col-headers span:nth-child(5),
+  .table-row > span.table-date,
+  .table-row > div:nth-child(4) {
+    display: none;
+  }
+
+  /* Topbar adjustments */
+  .topbar {
+    padding: 0 16px;
+  }
+  .topbar-time {
+    display: none;
+  }
+
+  /* Page content padding */
+  .page-content {
+    padding: 16px;
+  }
+
+  /* Pay page card */
+  .pay-card {
+    padding: 20px 18px 18px;
+  }
+  .pay-amount-value {
+    font-size: 30px !important;
+  }
+
+  /* Transactions table on mobile */
+  .tx-col-headers {
+    grid-template-columns: 2fr 1fr 1fr !important;
+  }
+  .tx-row {
+    grid-template-columns: 2fr 1fr 1fr !important;
+  }
+  .tx-col-headers span:nth-child(3),
+  .tx-col-headers span:nth-child(4),
+  .tx-col-headers span:nth-child(5),
+  .tx-row .tx-from,
+  .tx-row .tx-date,
+  .tx-row .tx-hash-link {
+    display: none;
+  }
+
+  /* Stats card font smaller on mobile */
+  .stat-value {
+    font-size: 16px !important;
+  }
+
+  /* Welcome card */
+  .welcome-card {
+    padding: 32px 24px;
+  }
+
+  /* Quick actions grid */
+  .quick-actions-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Table header wraps on mobile */
+  .table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .table-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* Tx stats grid */
+  .tx-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Footer */
+  .page-footer {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    text-align: center;
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Even smaller screens */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .topbar-network-badge {
+    display: none;
+  }
+}
