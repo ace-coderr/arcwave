@@ -1,0 +1,176 @@
+"use client";
+
+import { useState } from "react";
+import { useAccount } from "wagmi";
+import { getPaymentUrl } from "@/lib/utils";
+
+interface CreateLinkFormProps {
+  onLinkCreated: () => void;
+}
+
+export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
+  const { address, isConnected } = useAccount();
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [createdLink, setCreatedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isConnected || !address) { setError("Connect your wallet first."); return; }
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed <= 0) { setError("Enter a valid amount greater than 0."); return; }
+    if (!title.trim()) { setError("Title is required."); return; }
+    setIsLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          amount: parsed.toString(),
+          description: description.trim() || undefined,
+          recipientAddress: address,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+      const { link } = await res.json();
+      setCreatedLink(getPaymentUrl(link.id));
+      setTitle(""); setAmount(""); setDescription("");
+      onLinkCreated();
+    } catch (err: any) {
+      setError(err.message ?? "Something went wrong.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!createdLink) return;
+    await navigator.clipboard.writeText(createdLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="form-card">
+
+      {/* Header */}
+      <div className="form-card-header">
+        <div className="form-card-header-icon">
+          <svg viewBox="0 0 18 18" fill="none" width="15" height="15">
+            <path d="M9 3v12M3 9h12" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </div>
+        <div>
+          <div className="form-card-title">New Payment Link</div>
+          <div className="form-card-subtitle">Generate a shareable USDC link</div>
+        </div>
+      </div>
+
+      <div className="form-card-body">
+        {createdLink ? (
+          /* ── Success state ── */
+          <div className="animate-fade-up">
+            <div className="success-box">
+              <div className="success-box-header">
+                <div className="success-check-icon">
+                  <svg viewBox="0 0 12 12" fill="none" width="10" height="10">
+                    <path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <span className="success-label">Link created successfully</span>
+              </div>
+              <div className="success-link-row">
+                <div className="success-link-input">{createdLink}</div>
+                <button
+                  onClick={handleCopy}
+                  className={`success-copy-btn${copied ? " copied" : ""}`}
+                >
+                  {copied ? "✓ Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
+            <button className="form-another-btn" onClick={() => setCreatedLink(null)}>
+              + Create another link
+            </button>
+          </div>
+        ) : (
+          /* ── Form ── */
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">Title</label>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Freelance Invoice #102"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={80}
+                required
+                disabled={!isConnected}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Amount</label>
+              <div className="form-input-wrap">
+                <input
+                  type="number"
+                  className="input mono"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0.000001"
+                  step="any"
+                  required
+                  disabled={!isConnected}
+                  style={{ paddingRight: 52 }}
+                />
+                <span className="form-input-suffix">USDC</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">
+                Description <span className="form-label-optional">(optional)</span>
+              </label>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Logo design for Acme Corp"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                maxLength={200}
+                disabled={!isConnected}
+              />
+            </div>
+
+            {error && <div className="form-error">{error}</div>}
+
+            <button
+              type="submit"
+              className="form-submit-btn"
+              disabled={isLoading || !isConnected}
+            >
+              {isLoading ? (
+                <span className="form-submit-spinner">
+                  <span className="spinner" />
+                  Generating...
+                </span>
+              ) : !isConnected ? (
+                "Connect Wallet First"
+              ) : (
+                "Generate Payment Link"
+              )}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}

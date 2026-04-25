@@ -1,0 +1,23 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PaymentLink {
+  id               String    @id @default(cuid())
+  title            String
+  description      String?
+  amount           String
+  recipientAddress String
+  status           String    @default("ACTIVE")
+  txHash           String?
+  paidBy           String?
+  paidAt           DateTime?
+  expiresAt        DateTime
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
