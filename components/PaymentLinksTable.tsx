@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount } from "wagmi";
 import { formatUSDC, getStatusLabel, getPaymentUrl, formatDate, shortenAddress } from "@/lib/utils";
-import { ExpiryCountdown } from "@/components/ExpiryCountdown";
 
 interface PaymentLink {
   id: string;
@@ -15,7 +14,6 @@ interface PaymentLink {
   txHash?: string;
   paidBy?: string;
   createdAt: string;
-  expiresAt: string;
 }
 
 type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "EXPIRED";
@@ -38,6 +36,7 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("ALL");
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const fetchLinks = useCallback(async () => {
     if (!address) return;
@@ -63,16 +62,24 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleCancel = async (id: string) => {
+    if (!confirm("Cancel this payment link? It will no longer be payable.")) return;
+    setCancellingId(id);
+    try {
+      await fetch(`/api/links/${id}`, { method: "DELETE" });
+      await fetchLinks();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const handleExportCSV = () => {
     if (!links.length) return;
-    const header = ["Title", "Amount (USDC)", "Status", "Created", "Expires At", "Tx Hash"];
+    const header = ["Title", "Amount (USDC)", "Status", "Created", "Tx Hash"];
     const rows = links.map((l) => [
-      `"${l.title}"`,
-      l.amount,
-      l.status,
-      formatDate(l.createdAt),
-      formatDate(l.expiresAt),
-      l.txHash ?? "",
+      `"${l.title}"`, l.amount, l.status, formatDate(l.createdAt), l.txHash ?? "",
     ]);
     const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
     const a = document.createElement("a");
@@ -89,8 +96,8 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
         <div className="table-not-connected">
           <div className="table-not-connected-icon">
             <svg viewBox="0 0 22 22" fill="none" width="18" height="18">
-              <rect x="2" y="7" width="18" height="13" rx="2" stroke="#4a4f6a" strokeWidth="1.4" />
-              <path d="M15 7V5a4 4 0 00-8 0v2" stroke="#4a4f6a" strokeWidth="1.4" strokeLinecap="round" />
+              <rect x="2" y="7" width="18" height="13" rx="2" stroke="#4a4f6a" strokeWidth="1.4"/>
+              <path d="M15 7V5a4 4 0 00-8 0v2" stroke="#4a4f6a" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
           </div>
           <p className="table-not-connected-text">Connect your wallet to view payment links</p>
@@ -102,7 +109,6 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
 
   return (
     <div className="table-card">
-
       {/* Header */}
       <div className="table-header">
         <div className="table-header-left">
@@ -122,38 +128,33 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
             </button>
           ))}
           <button className="table-refresh-btn" onClick={fetchLinks} title="Refresh">↻</button>
-          <button
-            className="table-export-btn"
-            onClick={handleExportCSV}
-            disabled={!links.length}
-          >
+          <button className="table-export-btn" onClick={handleExportCSV} disabled={!links.length}>
             Export CSV
           </button>
         </div>
       </div>
 
-      {/* Loading skeletons */}
+      {/* Loading */}
       {isLoading && (
         <>
           {[1, 2, 3].map((i) => (
             <div key={i} className="table-skeleton-row">
-              <div className="skeleton" style={{ height: 13, width: "55%" }} />
-              <div className="skeleton" style={{ height: 20, width: 70, borderRadius: 20 }} />
-              <div className="skeleton" style={{ height: 13, width: 75 }} />
-              <div className="skeleton" style={{ height: 13, width: 55 }} />
-              <div className="skeleton" style={{ height: 13, width: 45 }} />
-              <div className="skeleton" style={{ height: 28, width: 75, borderRadius: 7 }} />
+              <div className="skeleton" style={{ height: 13, width: "55%" }}/>
+              <div className="skeleton" style={{ height: 20, width: 70, borderRadius: 20 }}/>
+              <div className="skeleton" style={{ height: 13, width: 80 }}/>
+              <div className="skeleton" style={{ height: 13, width: 60 }}/>
+              <div className="skeleton" style={{ height: 28, width: 120, borderRadius: 7 }}/>
             </div>
           ))}
         </>
       )}
 
-      {/* Empty state */}
+      {/* Empty */}
       {!isLoading && filtered.length === 0 && (
         <div className="table-empty">
           <div className="table-empty-icon">
             <svg viewBox="0 0 18 18" fill="none" width="15" height="15">
-              <path d="M9 3v12M3 9h12" stroke="#4a4f6a" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M9 3v12M3 9h12" stroke="#4a4f6a" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </div>
           <p className="table-empty-title">
@@ -165,18 +166,17 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
         </div>
       )}
 
-      {/* Column headers + rows */}
+      {/* Rows */}
       {!isLoading && filtered.length > 0 && (
         <>
           <div className="table-col-headers">
-            {["TITLE", "STATUS", "AMOUNT", "EXPIRES IN", "DATE", ""].map((col) => (
+            {["TITLE", "STATUS", "AMOUNT", "CREATED", "ACTIONS"].map((col) => (
               <span key={col} className="table-col-header">{col}</span>
             ))}
           </div>
 
           {filtered.map((link) => (
             <div key={link.id} className="table-row animate-fade-up">
-
               {/* Title */}
               <div className="table-cell-title">
                 <div className="table-cell-title-name">
@@ -204,7 +204,7 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
               {/* Status */}
               <div>
                 <span className={`status-badge ${STATUS_CLASS[link.status] ?? ""}`}>
-                  <span className="status-badge-dot" />
+                  <span className="status-badge-dot"/>
                   {getStatusLabel(link.status)}
                 </span>
               </div>
@@ -217,29 +217,34 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
                 </span>
               </div>
 
-              {/* Expiry countdown — only show for ACTIVE links */}
-              <div>
-                {link.status === "ACTIVE" ? (
-                  <ExpiryCountdown
-                    expiresAt={link.expiresAt}
-                    onExpired={fetchLinks}
-                  />
-                ) : (
-                  <span className="table-date">—</span>
-                )}
-              </div>
-
               {/* Date */}
               <span className="table-date">{formatDate(link.createdAt)}</span>
 
-              {/* Copy */}
-              <button
-                onClick={() => handleCopy(link.id)}
-                className={`table-copy-btn${copiedId === link.id ? " copied" : ""}`}
-                disabled={link.status === "EXPIRED"}
-              >
-                {copiedId === link.id ? "✓ Copied" : "Copy Link"}
-              </button>
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 6 }}>
+                {link.status === "ACTIVE" && (
+                  <>
+                    <button
+                      onClick={() => handleCopy(link.id)}
+                      className={`table-copy-btn${copiedId === link.id ? " copied" : ""}`}
+                    >
+                      {copiedId === link.id ? "✓ Copied" : "Copy"}
+                    </button>
+                    <button
+                      onClick={() => handleCancel(link.id)}
+                      disabled={cancellingId === link.id}
+                      className="table-cancel-btn"
+                    >
+                      {cancellingId === link.id ? "..." : "Cancel"}
+                    </button>
+                  </>
+                )}
+                {link.status !== "ACTIVE" && (
+                  <span className="table-date" style={{ fontSize: 11, color: "#4a4f6a" }}>
+                    {link.status === "COMPLETED" ? "Paid ✓" : "Cancelled"}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </>

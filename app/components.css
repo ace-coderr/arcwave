@@ -578,3 +578,38 @@
     display: none;
   }
 }
+
+/* ================================================================
+   ONE-TIME USE UPDATE — paste at bottom of components.css
+   ================================================================ */
+
+/* Updated table grid — 5 columns (removed expiry column) */
+.table-col-headers,
+.table-row,
+.table-skeleton-row {
+  grid-template-columns: 2fr 110px 130px 100px 130px !important;
+}
+
+/* Cancel button */
+.table-cancel-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 7px;
+  color: #f87171;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.table-cancel-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.table-cancel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

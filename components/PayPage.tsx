@@ -9,7 +9,7 @@ import {
 import { injected } from "wagmi/connectors";
 import { parseEther, formatEther } from "viem";
 import { arcTestnet } from "@/lib/arcChain";
-import { formatUSDC, shortenAddress } from "@/lib/utils";
+import { formatUSDC } from "@/lib/utils";
 
 interface PaymentLink {
   id: string;
@@ -19,7 +19,13 @@ interface PaymentLink {
   recipientAddress: string;
   status: string;
   txHash?: string;
-  expiresAt: string;
+}
+
+// Mask wallet address for privacy — never show full address on pay page
+// Shows only first 4 and last 4 chars with heavy masking in between
+function maskAddress(address: string): string {
+  if (!address || address.length < 10) return "••••••••";
+  return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
 }
 
 export function PayPage({ link }: { link: PaymentLink }) {
@@ -28,9 +34,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const [error, setError] = useState("");
   const [paySuccess, setPaySuccess] = useState(link.status === "COMPLETED");
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
-  const [isExpired, setIsExpired] = useState(
-    link.status === "EXPIRED" || new Date() > new Date(link.expiresAt)
-  );
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -47,24 +50,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Mark paid once tx is confirmed on chain
   useEffect(() => {
     if (txConfirmed && txHash && address && !paySuccess) {
       markPaid(txHash, address);
     }
   }, [txConfirmed]);
-
-  // Live expiry check
-  useEffect(() => {
-    if (paySuccess || isExpired) return;
-    const id = setInterval(() => {
-      if (new Date() > new Date(link.expiresAt)) {
-        setIsExpired(true);
-        clearInterval(id);
-      }
-    }, 5000);
-    return () => clearInterval(id);
-  }, [link.expiresAt, paySuccess, isExpired]);
 
   const markPaid = async (hash: string, payer: string) => {
     setIsMarkingPaid(true);
@@ -76,7 +66,10 @@ export function PayPage({ link }: { link: PaymentLink }) {
         body: JSON.stringify({ txHash: hash, paidBy: payer }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
+      if (!res.ok) {
+        setError(data.error ?? "Could not record payment.");
+        return;
+      }
       setPaySuccess(true);
     } catch (e: any) {
       if (txConfirmed) setPaySuccess(true);
@@ -89,7 +82,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const handlePay = () => {
     setError("");
     sendTransaction(
-      { to: link.recipientAddress as `0x${string}`, value: parseEther(link.amount), chainId: arcTestnet.id },
+      {
+        to: link.recipientAddress as `0x${string}`,
+        value: parseEther(link.amount),
+        chainId: arcTestnet.id,
+      },
       {
         onSuccess: (hash) => {
           setTxHash(hash);
@@ -111,43 +108,20 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
   const hasEnough = bal >= parseFloat(link.amount);
 
-  // ── Success ──
-  if (paySuccess) {
-    return (
-      <div className="pay-page">
-        <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)" }} />
-          <div className="pay-success-icon">
-            <svg viewBox="0 0 24 24" fill="none" width="26" height="26">
-              <path d="M5 12l4.5 4.5L19 7" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <h2 className="pay-success-title">Payment Complete!</h2>
-          <p className="pay-success-desc">
-            <strong style={{ color: "#f0f2ff" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
-          </p>
-          {(txHash || link.txHash) && (
-            <a href={`https://testnet.arcscan.app/tx/${txHash ?? link.txHash}`} target="_blank" rel="noopener noreferrer" className="pay-success-txlink">
-              View on ArcScan ↗
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Expired ──
-  if (isExpired) {
+  // ── Already used (one-time link completed) ────────────────────────────────
+  if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
         <div className="pay-card">
           <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }} />
-          <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>⏰</div>
-            <h2 style={{ fontSize: 17, fontWeight: 700, color: "#f87171", marginBottom: 8 }}>Link Expired</h2>
-            <p style={{ fontSize: 13, color: "#8b90b0", lineHeight: 1.6 }}>
-              This payment link for <strong style={{ color: "#f0f2ff" }}>{link.title}</strong> has expired.
-              The creator needs to generate a new link.
+          <div style={{ textAlign: "center", padding: "8px 0" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+            <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Already Used</h2>
+            <p className="pay-success-desc">
+              This payment link has already been paid. Each link can only be used once.
+            </p>
+            <p style={{ fontSize: 12, color: "#4a4f6a", marginTop: 8 }}>
+              Ask the creator to generate a new link.
             </p>
           </div>
         </div>
@@ -156,13 +130,68 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Cancelled ──────────────────────────────────────────────────────────────
+  if (link.status === "EXPIRED") {
+    return (
+      <div className="pay-page">
+        <div className="pay-card">
+          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }} />
+          <div style={{ textAlign: "center", padding: "8px 0" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
+            <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Cancelled</h2>
+            <p className="pay-success-desc">
+              This payment link has been cancelled by the creator.
+            </p>
+          </div>
+        </div>
+        <p className="pay-powered">Powered by Arc Network & Circle</p>
+      </div>
+    );
+  }
+
+  // ── Payment success ────────────────────────────────────────────────────────
+  if (paySuccess) {
+    return (
+      <div className="pay-page">
+        <div className="pay-card">
+          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)" }} />
+          <div className="pay-success-icon">
+            <svg viewBox="0 0 24 24" fill="none" width="26" height="26">
+              <path d="M5 12l4.5 4.5L19 7" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h2 className="pay-success-title">Payment Complete!</h2>
+          <p className="pay-success-desc">
+            <strong style={{ color: "#f0f2ff" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
+          </p>
+          <p style={{ fontSize: 11, color: "#4a4f6a", textAlign: "center", marginBottom: 12 }}>
+            This link is now closed — it can only be used once.
+          </p>
+          {(txHash || link.txHash) && (
+            <a
+              href={`https://testnet.arcscan.app/tx/${txHash ?? link.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pay-success-txlink"
+            >
+              View on ArcScan ↗
+            </a>
+          )}
+        </div>
+        <p className="pay-powered">Powered by Arc Network & Circle</p>
+      </div>
+    );
+  }
+
   return (
     <div className="pay-page">
+      {/* Header */}
       <div className="pay-header">
         <div className="pay-header-logo">
           <div className="pay-header-logo-icon">
             <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
-              <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
+                stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
             </svg>
           </div>
           <span className="pay-header-logo-text">Arc<span>Wave</span></span>
@@ -171,8 +200,9 @@ export function PayPage({ link }: { link: PaymentLink }) {
       </div>
 
       <div className="pay-card">
-        <div className="pay-card-top-line" />
+        <div className="pay-card-top-line"/>
 
+        {/* Amount */}
         <div className="pay-amount-section">
           <div>
             <span className="pay-amount-value">{formatUSDC(link.amount)}</span>
@@ -182,25 +212,34 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-amount-desc">{link.description}</p>}
         </div>
 
+        {/* Details — address is masked for privacy */}
         <div className="pay-details">
           <div className="pay-detail-row">
             <span className="pay-detail-label">Recipient</span>
-            <a href={`https://testnet.arcscan.app/address/${link.recipientAddress}`} target="_blank" rel="noopener noreferrer" className="pay-detail-link">
-              {shortenAddress(link.recipientAddress)} ↗
-            </a>
+            {/* Address is masked — payer cannot track the recipient on ArcScan */}
+            <span className="pay-detail-value mono" style={{ letterSpacing: "0.05em" }}>
+              {maskAddress(link.recipientAddress)}
+            </span>
           </div>
           <div className="pay-detail-row">
             <span className="pay-detail-label">Network</span>
             <span className="pay-detail-value">
-              <span className="pay-network-dot" /> Arc Testnet
+              <span className="pay-network-dot"/> Arc Testnet
             </span>
           </div>
           <div className="pay-detail-row">
             <span className="pay-detail-label">Token</span>
             <span className="pay-detail-value mono">USDC (native)</span>
           </div>
+          <div className="pay-detail-row">
+            <span className="pay-detail-label">Link type</span>
+            <span className="pay-detail-value" style={{ color: "#f59e0b", fontSize: 11 }}>
+              One-time use
+            </span>
+          </div>
         </div>
 
+        {/* Action area */}
         {!mounted ? null : !isConnected ? (
           <button className="pay-btn-primary" onClick={() => connect({ connector: injected() })}>
             Connect Wallet to Pay
@@ -214,26 +253,51 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </>
         ) : isPending || isWaiting || isMarkingPaid ? (
           <div className="pay-confirming">
-            <div className="pay-confirming-spinner" />
+            <div className="pay-confirming-spinner"/>
             <p className="pay-confirming-text">
-              {isPending ? "Confirm in MetaMask..." : isWaiting ? "Waiting for block confirmation..." : "Recording payment..."}
+              {isPending
+                ? "Confirm in MetaMask..."
+                : isWaiting
+                ? "Waiting for block confirmation..."
+                : "Recording payment..."}
             </p>
             {txHash && (
-              <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-success-txlink" style={{ marginTop: 8 }}>
+              <a
+                href={`https://testnet.arcscan.app/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pay-success-txlink"
+                style={{ marginTop: 8 }}
+              >
                 Track on ArcScan ↗
               </a>
             )}
           </div>
         ) : (
           <>
-            <button className="pay-btn-primary" onClick={handlePay} disabled={!hasEnough}>
+            <button
+              className="pay-btn-primary"
+              onClick={handlePay}
+              disabled={!hasEnough}
+            >
               Pay {formatUSDC(link.amount)} USDC
             </button>
             {balance && (
               <p className={`pay-balance-note${!hasEnough ? " insufficient" : ""}`}>
-                Your balance: <span className="pay-balance-amount">{bal.toFixed(4)} USDC</span>
+                Your balance:{" "}
+                <span className="pay-balance-amount">{bal.toFixed(4)} USDC</span>
                 {!hasEnough && (
-                  <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-balance-faucet">get more from faucet</a></>
+                  <>
+                    {" — "}
+                    <a
+                      href="https://faucet.circle.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="pay-balance-faucet"
+                    >
+                      get more from faucet
+                    </a>
+                  </>
                 )}
               </p>
             )}
@@ -244,11 +308,16 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
         {mounted && isConnected && address && (
           <div className="pay-wallet-footer">
-            <span className="pay-wallet-address">{shortenAddress(address)}</span>
-            <button className="pay-disconnect-btn" onClick={() => disconnect()}>Disconnect</button>
+            <span className="pay-wallet-address">
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+            <button className="pay-disconnect-btn" onClick={() => disconnect()}>
+              Disconnect
+            </button>
           </div>
         )}
       </div>
+
       <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );
