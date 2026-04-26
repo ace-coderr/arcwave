@@ -13,13 +13,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function PayPageRoute({ params }: PageProps) {
   const link = await db.paymentLink.findUnique({ where: { id: params.linkId } });
-  if (!link) notFound();
-
-  // Auto-expire before rendering
-  if (link.status === "ACTIVE" && new Date() > link.expiresAt) {
-    await db.paymentLink.update({ where: { id: params.linkId }, data: { status: "EXPIRED" } });
-    link.status = "EXPIRED";
-  }
+  if (!link) return notFound();
 
   return (
     <PayPage
@@ -31,7 +25,6 @@ export default async function PayPageRoute({ params }: PageProps) {
         recipientAddress: link.recipientAddress,
         status: link.status,
         txHash: link.txHash ?? undefined,
-        expiresAt: link.expiresAt.toISOString(),
       }}
     />
   );
