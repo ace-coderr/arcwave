@@ -3,13 +3,26 @@ import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
 import { isValidTxHash } from "@/lib/utils";
 import { parseEther, formatEther } from "viem";
+import { forwardFunds } from "@/lib/stealthWallet";
 
 interface RouteParams { params: { linkId: string } }
 
-// ─── GET: Fetch a single payment link ────────────────────────────────────────
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      amount: true,
+      stealthAddress: true,    // Show stealth address to payer — NOT real address
+      status: true,
+      txHash: true,
+      forwardTxHash: true,
+      createdAt: true,
+      // recipientAddress — intentionally excluded from client response
+      // stealthPrivateKey — never sent to client
+    },
   });
 
   if (!link) {
@@ -19,9 +32,6 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   return NextResponse.json({ link });
 }
 
-// ─── PATCH: Mark a payment link as completed (one-time use) ──────────────────
-// Once paid, the link is permanently COMPLETED and cannot be paid again.
-// This is the one-time use enforcement — no time expiry, just payment expiry.
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
   let body: any;
   try {
@@ -39,6 +49,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     );
   }
 
+  // Fetch full link including private key for forwarding
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },
   });
@@ -47,23 +58,26 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Payment link not found." }, { status: 404 });
   }
 
-  // ONE-TIME USE: already completed — reject any further payment attempts
   if (link.status === "COMPLETED") {
     return NextResponse.json(
-      { error: "This payment link has already been used. Each link can only be paid once." },
+      { error: "This payment link has already been used." },
       { status: 409 }
     );
   }
 
-  // Manually expired — reject
   if (link.status === "EXPIRED") {
     return NextResponse.json(
-      { error: "This payment link has been cancelled by the creator." },
+      { error: "This payment link has been cancelled." },
       { status: 410 }
     );
   }
 
-  // Try on-chain verification
+  // Determine which address to verify against
+  // If stealth address exists, payment should go there
+  // If not (old links), fall back to real recipient address
+  const expectedPaymentAddress = (link.stealthAddress ?? link.recipientAddress).toLowerCase();
+
+  // Verify on-chain
   let verificationPassed = false;
   let verificationError = "";
 
@@ -74,9 +88,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     if (tx && tx.blockNumber) {
       const txTo = tx.to?.toLowerCase();
-      const expectedTo = link.recipientAddress.toLowerCase();
 
-      if (txTo !== expectedTo) {
+      if (txTo !== expectedPaymentAddress) {
         return NextResponse.json(
           { error: `Transaction sent to wrong address.` },
           { status: 400 }
@@ -94,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       verificationPassed = true;
     } else if (tx && !tx.blockNumber) {
       return NextResponse.json(
-        { error: "Transaction is still pending. Please wait a moment and try again." },
+        { error: "Transaction is still pending. Please wait and try again." },
         { status: 400 }
       );
     } else {
@@ -105,8 +118,8 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     console.warn("[PATCH] Verification skipped:", verificationError);
   }
 
-  // Mark as COMPLETED — one-time use enforced
-  const updatedLink = await db.paymentLink.update({
+  // Mark as COMPLETED first so payer sees success immediately
+  await db.paymentLink.update({
     where: { id: params.linkId },
     data: {
       status: "COMPLETED",
@@ -116,17 +129,47 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     },
   });
 
+  // ── Auto-forward funds from stealth wallet to real recipient ─────────────
+  // This runs after marking complete so the payer doesn't have to wait
+  if (link.stealthPrivateKey && link.recipientAddress) {
+    console.log(`[PATCH] Initiating stealth forward for link ${params.linkId}`);
+
+    // Forward in background — don't await so payer gets instant response
+    forwardFunds(link.stealthPrivateKey, link.recipientAddress)
+      .then(async (result) => {
+        if (result.success && result.txHash) {
+          // Store the forwarding tx hash
+          await db.paymentLink.update({
+            where: { id: params.linkId },
+            data: { forwardTxHash: result.txHash },
+          });
+          console.log(`[PATCH] Funds forwarded: ${result.txHash}`);
+        } else {
+          console.error(`[PATCH] Forward failed: ${result.error}`);
+        }
+      })
+      .catch((err) => {
+        console.error("[PATCH] Forward error:", err);
+      });
+  }
+
+  // Return safe fields only
+  const safeLink = {
+    id: link.id,
+    title: link.title,
+    amount: link.amount,
+    status: "COMPLETED",
+    txHash,
+  };
+
   return NextResponse.json({
     success: true,
-    link: updatedLink,
+    link: safeLink,
     verified: verificationPassed,
-    message: verificationPassed
-      ? "Payment verified on-chain. Link is now closed."
-      : `Payment recorded. Link is now closed.`,
+    message: "Payment received. Funds are being forwarded to recipient.",
   });
 }
 
-// ─── DELETE: Manually cancel/expire a payment link ────────────────────────────
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },

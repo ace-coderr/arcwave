@@ -22,7 +22,8 @@ export default async function PayPageRoute({ params }: PageProps) {
         title: link.title,
         description: link.description ?? undefined,
         amount: link.amount,
-        recipientAddress: link.recipientAddress,
+        // Pass stealthAddress to payer — real recipientAddress never sent to client
+        stealthAddress: link.stealthAddress ?? undefined,
         status: link.status,
         txHash: link.txHash ?? undefined,
       }}

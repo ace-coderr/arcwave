@@ -16,13 +16,12 @@ interface PaymentLink {
   title: string;
   description?: string;
   amount: string;
-  recipientAddress: string;
+  stealthAddress?: string; // Payer sends here — real address never exposed
   status: string;
   txHash?: string;
 }
 
-// Mask wallet address for privacy — never show full address on pay page
-// Shows only first 4 and last 4 chars with heavy masking in between
+// Mask any address for display — shows enough to verify but not identify
 function maskAddress(address: string): string {
   if (!address || address.length < 10) return "••••••••";
   return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
@@ -40,6 +39,9 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const isOnArc = chainId === arcTestnet.id;
+
+  // Use stealth address for balance check
+  const paymentTarget = link.stealthAddress as `0x${string}` | undefined;
 
   const { data: balance } = useBalance({ address, chainId: arcTestnet.id });
   const { sendTransaction, isPending } = useSendTransaction();
@@ -73,17 +75,21 @@ export function PayPage({ link }: { link: PaymentLink }) {
       setPaySuccess(true);
     } catch (e: any) {
       if (txConfirmed) setPaySuccess(true);
-      else setError("Network error. Transaction was sent — save your tx hash.");
+      else setError("Network error recording payment. Save your tx hash.");
     } finally {
       setIsMarkingPaid(false);
     }
   };
 
   const handlePay = () => {
+    if (!paymentTarget) {
+      setError("Payment target not available. Please try refreshing.");
+      return;
+    }
     setError("");
     sendTransaction(
       {
-        to: link.recipientAddress as `0x${string}`,
+        to: paymentTarget,
         value: parseEther(link.amount),
         chainId: arcTestnet.id,
       },
@@ -108,12 +114,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
   const hasEnough = bal >= parseFloat(link.amount);
 
-  // ── Already used (one-time link completed) ────────────────────────────────
+  // ── Already used ──────────────────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }} />
+          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }}/>
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
             <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Already Used</h2>
@@ -135,13 +141,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
     return (
       <div className="pay-page">
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }} />
+          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }}/>
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
             <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Cancelled</h2>
-            <p className="pay-success-desc">
-              This payment link has been cancelled by the creator.
-            </p>
+            <p className="pay-success-desc">This payment link has been cancelled.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -149,12 +153,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Payment success ────────────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)" }} />
+          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)" }}/>
           <div className="pay-success-icon">
             <svg viewBox="0 0 24 24" fill="none" width="26" height="26">
               <path d="M5 12l4.5 4.5L19 7" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -185,7 +189,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   return (
     <div className="pay-page">
-      {/* Header */}
       <div className="pay-header">
         <div className="pay-header-logo">
           <div className="pay-header-logo-icon">
@@ -212,13 +215,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-amount-desc">{link.description}</p>}
         </div>
 
-        {/* Details — address is masked for privacy */}
+        {/* Details — stealth address shown, real address never revealed */}
         <div className="pay-details">
           <div className="pay-detail-row">
-            <span className="pay-detail-label">Recipient</span>
-            {/* Address is masked — payer cannot track the recipient on ArcScan */}
-            <span className="pay-detail-value mono" style={{ letterSpacing: "0.05em" }}>
-              {maskAddress(link.recipientAddress)}
+            <span className="pay-detail-label">Pay to</span>
+            <span className="pay-detail-value mono" style={{ letterSpacing: "0.04em" }}>
+              {link.stealthAddress ? maskAddress(link.stealthAddress) : "••••••••••••••••••"}
             </span>
           </div>
           <div className="pay-detail-row">
@@ -232,11 +234,28 @@ export function PayPage({ link }: { link: PaymentLink }) {
             <span className="pay-detail-value mono">USDC (native)</span>
           </div>
           <div className="pay-detail-row">
-            <span className="pay-detail-label">Link type</span>
+            <span className="pay-detail-label">Type</span>
             <span className="pay-detail-value" style={{ color: "#f59e0b", fontSize: 11 }}>
-              One-time use
+              One-time · Privacy protected
             </span>
           </div>
+        </div>
+
+        {/* Privacy notice */}
+        <div style={{
+          background: "rgba(59,130,246,0.05)",
+          border: "1px solid rgba(59,130,246,0.15)",
+          borderRadius: 8,
+          padding: "8px 12px",
+          marginBottom: 14,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
+          <p style={{ fontSize: 11, color: "#6b7094", lineHeight: 1.5 }}>
+            Recipient identity is protected. Funds are routed through a privacy layer before delivery.
+          </p>
         </div>
 
         {/* Action area */}
@@ -278,7 +297,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
             <button
               className="pay-btn-primary"
               onClick={handlePay}
-              disabled={!hasEnough}
+              disabled={!hasEnough || !paymentTarget}
             >
               Pay {formatUSDC(link.amount)} USDC
             </button>
@@ -289,12 +308,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
                 {!hasEnough && (
                   <>
                     {" — "}
-                    <a
-                      href="https://faucet.circle.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="pay-balance-faucet"
-                    >
+                    <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-balance-faucet">
                       get more from faucet
                     </a>
                   </>
@@ -308,12 +322,8 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
         {mounted && isConnected && address && (
           <div className="pay-wallet-footer">
-            <span className="pay-wallet-address">
-              {address.slice(0, 6)}...{address.slice(-4)}
-            </span>
-            <button className="pay-disconnect-btn" onClick={() => disconnect()}>
-              Disconnect
-            </button>
+            <span className="pay-wallet-address">{address.slice(0, 6)}...{address.slice(-4)}</span>
+            <button className="pay-disconnect-btn" onClick={() => disconnect()}>Disconnect</button>
           </div>
         )}
       </div>

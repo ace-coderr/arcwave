@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isValidAddress } from "@/lib/utils";
+import { generateStealthWallet } from "@/lib/stealthWallet";
 
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address");
@@ -16,6 +17,22 @@ export async function GET(req: NextRequest) {
     where: { recipientAddress: address.toLowerCase() },
     orderBy: { createdAt: "desc" },
     take: 100,
+    // Never return the encrypted private key to the client
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      amount: true,
+      recipientAddress: true,
+      stealthAddress: true,
+      forwardTxHash: true,
+      status: true,
+      txHash: true,
+      paidBy: true,
+      paidAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   return NextResponse.json({ links });
@@ -43,15 +60,33 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Generate a fresh stealth wallet for this payment link
+    // Payer will send to stealthAddress — funds forwarded to recipientAddress
+    const { address: stealthAddress, encryptedPrivateKey } = generateStealthWallet();
+
     const link = await db.paymentLink.create({
       data: {
         title: title.trim(),
         amount: parseFloat(amount).toString(),
         description: description?.trim() || null,
         recipientAddress: recipientAddress.toLowerCase(),
+        stealthAddress,
+        stealthPrivateKey: encryptedPrivateKey,
         status: "ACTIVE",
       },
+      // Return safe fields only — never return the private key
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        amount: true,
+        recipientAddress: true,
+        stealthAddress: true,
+        status: true,
+        createdAt: true,
+      },
     });
+
     return NextResponse.json({ link }, { status: 201 });
   } catch (err: any) {
     console.error("DB error:", err);
