@@ -9,18 +9,18 @@ datasource db {
 }
 
 model PaymentLink {
-  id                   String    @id @default(cuid())
-  title                String
-  description          String?
-  amount               String
-  recipientAddress     String    // Real wallet — never shown to payers
-  stealthAddress       String?   // Temp wallet shown to payers
-  stealthPrivateKey    String?   // Encrypted private key for forwarding
-  forwardTxHash        String?   // Tx hash of the forwarding transaction
-  status               String    @default("ACTIVE")
-  txHash               String?   // Payer's tx hash
-  paidBy               String?
-  paidAt               DateTime?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  title             String
+  description       String?
+  amount            String
+  recipientAddress  String
+  status            String    @default("ACTIVE")
+  txHash            String?
+  paidBy            String?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  stealthAddress    String?
+  stealthPrivateKey String?
+  forwardTxHash     String?
 }

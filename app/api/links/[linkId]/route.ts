@@ -50,8 +50,25 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   // Fetch full record including private key for potential forwarding
+  // Fetch full record including stealth fields
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      amount: true,
+      recipientAddress: true,
+      stealthAddress: true,
+      stealthPrivateKey: true,
+      forwardTxHash: true,
+      status: true,
+      txHash: true,
+      paidBy: true,
+      paidAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
 
   if (!link) {
