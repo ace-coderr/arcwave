@@ -95,7 +95,7 @@ export async function forwardFunds(
     // On Arc, USDC is native — gas is paid in USDC
     // Estimate: ~21000 gas * 22 Gwei = ~0.000462 USDC
     const gasPrice = await publicClient.getGasPrice();
-    const gasLimit = 21000n;
+    const gasLimit = BigInt(21000);
     const gasCost = gasPrice * gasLimit;
 
     // Make sure there's enough to cover gas
