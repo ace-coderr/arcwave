@@ -87,7 +87,7 @@ export async function forwardFunds(
     // Check balance of stealth wallet
     const balance = await publicClient.getBalance({ address: account.address });
 
-    if (balance === 0n) {
+    if (balance === BigInt(0)) {
       return { success: false, error: "Stealth wallet has no balance to forward." };
     }
 
