@@ -15,6 +15,8 @@ export default async function PayPageRoute({ params }: PageProps) {
   const link = await db.paymentLink.findUnique({ where: { id: params.linkId } });
   if (!link) return notFound();
 
+  const isStealthLink = !!link.stealthAddress;
+
   return (
     <PayPage
       link={{
@@ -22,8 +24,10 @@ export default async function PayPageRoute({ params }: PageProps) {
         title: link.title,
         description: link.description ?? undefined,
         amount: link.amount,
-        // Pass stealthAddress to payer — real recipientAddress never sent to client
-        stealthAddress: link.stealthAddress ?? undefined,
+        // Stealth link: pass stealthAddress, hide recipientAddress
+        // Normal link: pass recipientAddress for payment target
+        stealthAddress: link.stealthAddress ?? null,
+        recipientAddress: isStealthLink ? undefined : link.recipientAddress,
         status: link.status,
         txHash: link.txHash ?? undefined,
       }}

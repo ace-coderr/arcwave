@@ -13,6 +13,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [stealthMode, setStealthMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
           amount: parsed.toString(),
           description: description.trim() || undefined,
           recipientAddress: address,
+          stealthMode, // pass stealth preference to API
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
@@ -58,12 +60,10 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
 
   return (
     <div className="form-card">
-
-      {/* Header */}
       <div className="form-card-header">
         <div className="form-card-header-icon">
           <svg viewBox="0 0 18 18" fill="none" width="15" height="15">
-            <path d="M9 3v12M3 9h12" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
+            <path d="M9 3v12M3 9h12" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round"/>
           </svg>
         </div>
         <div>
@@ -74,23 +74,19 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
 
       <div className="form-card-body">
         {createdLink ? (
-          /* ── Success state ── */
           <div className="animate-fade-up">
             <div className="success-box">
               <div className="success-box-header">
                 <div className="success-check-icon">
                   <svg viewBox="0 0 12 12" fill="none" width="10" height="10">
-                    <path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
                 <span className="success-label">Link created successfully</span>
               </div>
               <div className="success-link-row">
                 <div className="success-link-input">{createdLink}</div>
-                <button
-                  onClick={handleCopy}
-                  className={`success-copy-btn${copied ? " copied" : ""}`}
-                >
+                <button onClick={handleCopy} className={`success-copy-btn${copied ? " copied" : ""}`}>
                   {copied ? "✓ Copied" : "Copy"}
                 </button>
               </div>
@@ -100,34 +96,27 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
             </button>
           </div>
         ) : (
-          /* ── Form ── */
           <form onSubmit={handleSubmit}>
+            {/* Title */}
             <div className="form-group">
               <label className="form-label">Title</label>
               <input
-                type="text"
-                className="input"
+                type="text" className="input"
                 placeholder="e.g. Freelance Invoice #102"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={80}
-                required
-                disabled={!isConnected}
+                value={title} onChange={e => setTitle(e.target.value)}
+                maxLength={80} required disabled={!isConnected}
               />
             </div>
 
+            {/* Amount */}
             <div className="form-group">
               <label className="form-label">Amount</label>
               <div className="form-input-wrap">
                 <input
-                  type="number"
-                  className="input mono"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  min="0.000001"
-                  step="any"
-                  required
+                  type="number" className="input mono"
+                  placeholder="0.00" value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  min="0.000001" step="any" required
                   disabled={!isConnected}
                   style={{ paddingRight: 52 }}
                 />
@@ -135,20 +124,57 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
               </div>
             </div>
 
+            {/* Description */}
             <div className="form-group">
               <label className="form-label">
                 Description <span className="form-label-optional">(optional)</span>
               </label>
               <input
-                type="text"
-                className="input"
+                type="text" className="input"
                 placeholder="e.g. Logo design for Acme Corp"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                maxLength={200}
-                disabled={!isConnected}
+                value={description} onChange={e => setDescription(e.target.value)}
+                maxLength={200} disabled={!isConnected}
               />
             </div>
+
+            {/* Stealth Mode Toggle */}
+            <div className="stealth-toggle-row">
+              <div className="stealth-toggle-info">
+                <div className="stealth-toggle-label">
+                  <svg viewBox="0 0 16 16" fill="none" width="13" height="13" style={{ flexShrink: 0 }}>
+                    <path d="M8 1C4.13 1 1 4.13 1 8s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 11c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm1-4H7V4h2v4z" fill="currentColor"/>
+                  </svg>
+                  Stealth Mode
+                </div>
+                <div className="stealth-toggle-desc">
+                  {stealthMode
+                    ? "Payment routed through temp wallet — your address is hidden"
+                    : "Payment goes directly to your wallet — address visible on-chain"}
+                </div>
+              </div>
+
+              {/* Toggle switch */}
+              <button
+                type="button"
+                onClick={() => setStealthMode(!stealthMode)}
+                disabled={!isConnected}
+                className={`toggle-switch${stealthMode ? " on" : ""}`}
+                aria-label="Toggle stealth mode"
+              >
+                <span className="toggle-knob"/>
+              </button>
+            </div>
+
+            {/* Stealth mode info box */}
+            {stealthMode && (
+              <div className="stealth-info-box animate-fade-up">
+                <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
+                <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
+                  A fresh temp wallet will receive the payment and auto-forward to your real address.
+                  Payer cannot track you on ArcScan.
+                </p>
+              </div>
+            )}
 
             {error && <div className="form-error">{error}</div>}
 
@@ -159,14 +185,12 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
             >
               {isLoading ? (
                 <span className="form-submit-spinner">
-                  <span className="spinner" />
-                  Generating...
+                  <span className="spinner"/>
+                  {stealthMode ? "Generating stealth link..." : "Generating..."}
                 </span>
-              ) : !isConnected ? (
-                "Connect Wallet First"
-              ) : (
-                "Generate Payment Link"
-              )}
+              ) : !isConnected ? "Connect Wallet First"
+                : stealthMode ? "Generate Private Link 🔒"
+                : "Generate Payment Link"}
             </button>
           </form>
         )}

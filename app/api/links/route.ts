@@ -17,7 +17,6 @@ export async function GET(req: NextRequest) {
     where: { recipientAddress: address.toLowerCase() },
     orderBy: { createdAt: "desc" },
     take: 100,
-    // Never return the encrypted private key to the client
     select: {
       id: true,
       title: true,
@@ -32,6 +31,7 @@ export async function GET(req: NextRequest) {
       paidAt: true,
       createdAt: true,
       updatedAt: true,
+      // stealthPrivateKey intentionally excluded — never sent to client
     },
   });
 
@@ -40,14 +40,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   let body: any;
-
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { title, amount, description, recipientAddress } = body;
+  const { title, amount, description, recipientAddress, stealthMode } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -60,9 +59,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Generate a fresh stealth wallet for this payment link
-    // Payer will send to stealthAddress — funds forwarded to recipientAddress
-    const { address: stealthAddress, encryptedPrivateKey } = generateStealthWallet();
+    // Only generate stealth wallet if user explicitly enabled stealth mode
+    let stealthAddress: string | null = null;
+    let stealthPrivateKey: string | null = null;
+
+    if (stealthMode === true) {
+      const stealth = generateStealthWallet();
+      stealthAddress = stealth.address;
+      stealthPrivateKey = stealth.encryptedPrivateKey;
+    }
 
     const link = await db.paymentLink.create({
       data: {
@@ -70,11 +75,10 @@ export async function POST(req: NextRequest) {
         amount: parseFloat(amount).toString(),
         description: description?.trim() || null,
         recipientAddress: recipientAddress.toLowerCase(),
-        stealthAddress,
-        stealthPrivateKey: encryptedPrivateKey,
+        stealthAddress,       // null if stealth off
+        stealthPrivateKey,    // null if stealth off
         status: "ACTIVE",
       },
-      // Return safe fields only — never return the private key
       select: {
         id: true,
         title: true,

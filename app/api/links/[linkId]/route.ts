@@ -15,12 +15,12 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       title: true,
       description: true,
       amount: true,
-      stealthAddress: true,    // Show stealth address to payer — NOT real address
+      stealthAddress: true,
       status: true,
       txHash: true,
       forwardTxHash: true,
       createdAt: true,
-      // recipientAddress — intentionally excluded from client response
+      // recipientAddress — excluded, never sent to payer
       // stealthPrivateKey — never sent to client
     },
   });
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Fetch full link including private key for forwarding
+  // Fetch full record including private key for potential forwarding
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },
   });
@@ -72,10 +72,13 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Determine which address to verify against
-  // If stealth address exists, payment should go there
-  // If not (old links), fall back to real recipient address
-  const expectedPaymentAddress = (link.stealthAddress ?? link.recipientAddress).toLowerCase();
+  // Determine expected payment address:
+  // - Stealth mode: payment should go to stealthAddress (temp wallet)
+  // - Normal mode: payment goes directly to recipientAddress (real wallet)
+  const isStealthLink = !!link.stealthAddress;
+  const expectedPaymentAddress = isStealthLink
+    ? link.stealthAddress!.toLowerCase()
+    : link.recipientAddress.toLowerCase();
 
   // Verify on-chain
   let verificationPassed = false;
@@ -91,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
       if (txTo !== expectedPaymentAddress) {
         return NextResponse.json(
-          { error: `Transaction sent to wrong address.` },
+          { error: `Transaction sent to wrong address. Expected ${expectedPaymentAddress}, got ${txTo}.` },
           { status: 400 }
         );
       }
@@ -118,7 +121,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     console.warn("[PATCH] Verification skipped:", verificationError);
   }
 
-  // Mark as COMPLETED first so payer sees success immediately
+  // Mark as COMPLETED
   await db.paymentLink.update({
     where: { id: params.linkId },
     data: {
@@ -129,67 +132,54 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     },
   });
 
-  // ── Auto-forward funds from stealth wallet to real recipient ─────────────
-  // This runs after marking complete so the payer doesn't have to wait
-  if (link.stealthPrivateKey && link.recipientAddress) {
-    console.log(`[PATCH] Initiating stealth forward for link ${params.linkId}`);
+  // If stealth mode — auto-forward from temp wallet to real recipient
+  if (isStealthLink && link.stealthPrivateKey && link.recipientAddress) {
+    console.log(`[PATCH] Stealth link — initiating forward for ${params.linkId}`);
 
-    // Forward in background — don't await so payer gets instant response
-    forwardFunds(link.stealthPrivateKey, link.recipientAddress)
-      .then(async (result) => {
-        if (result.success && result.txHash) {
-          // Store the forwarding tx hash
-          await db.paymentLink.update({
-            where: { id: params.linkId },
-            data: { forwardTxHash: result.txHash },
-          });
-          console.log(`[PATCH] Funds forwarded: ${result.txHash}`);
-        } else {
-          console.error(`[PATCH] Forward failed: ${result.error}`);
-        }
-      })
-      .catch((err) => {
-        console.error("[PATCH] Forward error:", err);
-      });
+    // Wait a few seconds for the block to settle before forwarding
+    setTimeout(() => {
+      forwardFunds(link.stealthPrivateKey!, link.recipientAddress)
+        .then(async (result) => {
+          if (result.success && result.txHash) {
+            await db.paymentLink.update({
+              where: { id: params.linkId },
+              data: { forwardTxHash: result.txHash },
+            });
+            console.log(`[PATCH] Stealth forward successful: ${result.txHash}`);
+          } else {
+            console.error(`[PATCH] Stealth forward failed: ${result.error}`);
+          }
+        })
+        .catch(err => console.error("[PATCH] Forward error:", err));
+    }, 3000); // 3 second delay to let block settle
   }
-
-  // Return safe fields only
-  const safeLink = {
-    id: link.id,
-    title: link.title,
-    amount: link.amount,
-    status: "COMPLETED",
-    txHash,
-  };
 
   return NextResponse.json({
     success: true,
-    link: safeLink,
+    link: {
+      id: link.id,
+      title: link.title,
+      amount: link.amount,
+      status: "COMPLETED",
+      txHash,
+      isStealthLink,
+    },
     verified: verificationPassed,
-    message: "Payment received. Funds are being forwarded to recipient.",
+    message: isStealthLink
+      ? "Payment received. Funds being forwarded via stealth layer."
+      : "Payment received and confirmed.",
   });
 }
 
 export async function DELETE(_req: NextRequest, { params }: RouteParams) {
-  const link = await db.paymentLink.findUnique({
-    where: { id: params.linkId },
-  });
-
-  if (!link) {
-    return NextResponse.json({ error: "Payment link not found." }, { status: 404 });
-  }
-
+  const link = await db.paymentLink.findUnique({ where: { id: params.linkId } });
+  if (!link) return NextResponse.json({ error: "Payment link not found." }, { status: 404 });
   if (link.status === "COMPLETED") {
-    return NextResponse.json(
-      { error: "Cannot cancel a completed payment." },
-      { status: 409 }
-    );
+    return NextResponse.json({ error: "Cannot cancel a completed payment." }, { status: 409 });
   }
-
   const updated = await db.paymentLink.update({
     where: { id: params.linkId },
     data: { status: "EXPIRED" },
   });
-
   return NextResponse.json({ success: true, link: updated });
 }

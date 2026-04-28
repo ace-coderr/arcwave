@@ -10,6 +10,7 @@ interface PaymentLink {
   description?: string;
   amount: string;
   recipientAddress: string;
+  stealthAddress?: string | null;
   status: string;
   txHash?: string;
   paidBy?: string;
@@ -43,15 +44,9 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
     setIsLoading(true);
     try {
       const res = await fetch(`/api/links?address=${address}`);
-      if (res.ok) {
-        const d = await res.json();
-        setLinks(d.links);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
+      if (res.ok) { const d = await res.json(); setLinks(d.links); }
+    } catch (err) { console.error(err); }
+    finally { setIsLoading(false); }
   }, [address]);
 
   useEffect(() => { fetchLinks(); }, [fetchLinks, refreshTrigger]);
@@ -68,27 +63,26 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
     try {
       await fetch(`/api/links/${id}`, { method: "DELETE" });
       await fetchLinks();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setCancellingId(null);
-    }
+    } catch (err) { console.error(err); }
+    finally { setCancellingId(null); }
   };
 
   const handleExportCSV = () => {
     if (!links.length) return;
-    const header = ["Title", "Amount (USDC)", "Status", "Created", "Tx Hash"];
-    const rows = links.map((l) => [
-      `"${l.title}"`, l.amount, l.status, formatDate(l.createdAt), l.txHash ?? "",
+    const header = ["Title", "Amount (USDC)", "Status", "Stealth", "Created", "Tx Hash"];
+    const rows = links.map(l => [
+      `"${l.title}"`, l.amount, l.status,
+      l.stealthAddress ? "Yes" : "No",
+      formatDate(l.createdAt), l.txHash ?? "",
     ]);
-    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+    const csv = [header, ...rows].map(r => r.join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     a.download = "arcwave-payments.csv";
     a.click();
   };
 
-  const filtered = filter === "ALL" ? links : links.filter((l) => l.status === filter);
+  const filtered = filter === "ALL" ? links : links.filter(l => l.status === filter);
 
   if (!isConnected) {
     return (
@@ -113,17 +107,11 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
       <div className="table-header">
         <div className="table-header-left">
           <span className="table-header-title">Payment Links</span>
-          {links.length > 0 && (
-            <span className="table-count-badge">{links.length}</span>
-          )}
+          {links.length > 0 && <span className="table-count-badge">{links.length}</span>}
         </div>
         <div className="table-header-right">
-          {(["ALL", "ACTIVE", "COMPLETED", "EXPIRED"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`filter-pill${filter === f ? " active" : ""}`}
-            >
+          {(["ALL", "ACTIVE", "COMPLETED", "EXPIRED"] as Filter[]).map(f => (
+            <button key={f} onClick={() => setFilter(f)} className={`filter-pill${filter === f ? " active" : ""}`}>
               {f}
             </button>
           ))}
@@ -136,17 +124,15 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
 
       {/* Loading */}
       {isLoading && (
-        <>
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="table-skeleton-row">
-              <div className="skeleton" style={{ height: 13, width: "55%" }}/>
-              <div className="skeleton" style={{ height: 20, width: 70, borderRadius: 20 }}/>
-              <div className="skeleton" style={{ height: 13, width: 80 }}/>
-              <div className="skeleton" style={{ height: 13, width: 60 }}/>
-              <div className="skeleton" style={{ height: 28, width: 120, borderRadius: 7 }}/>
-            </div>
-          ))}
-        </>
+        [1, 2, 3].map(i => (
+          <div key={i} className="table-skeleton-row">
+            <div className="skeleton" style={{ height: 13, width: "55%" }}/>
+            <div className="skeleton" style={{ height: 20, width: 70, borderRadius: 20 }}/>
+            <div className="skeleton" style={{ height: 13, width: 80 }}/>
+            <div className="skeleton" style={{ height: 13, width: 60 }}/>
+            <div className="skeleton" style={{ height: 28, width: 120, borderRadius: 7 }}/>
+          </div>
+        ))
       )}
 
       {/* Empty */}
@@ -170,30 +156,28 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
       {!isLoading && filtered.length > 0 && (
         <>
           <div className="table-col-headers">
-            {["TITLE", "STATUS", "AMOUNT", "CREATED", "ACTIONS"].map((col) => (
+            {["TITLE", "STATUS", "AMOUNT", "CREATED", "ACTIONS"].map(col => (
               <span key={col} className="table-col-header">{col}</span>
             ))}
           </div>
 
-          {filtered.map((link) => (
+          {filtered.map(link => (
             <div key={link.id} className="table-row animate-fade-up">
-              {/* Title */}
+
+              {/* Title + stealth badge */}
               <div className="table-cell-title">
                 <div className="table-cell-title-name">
-                  <span
-                    className="table-cell-status-dot"
-                    style={{ background: STATUS_DOT[link.status] ?? "#4a4f6a" }}
-                  />
+                  <span className="table-cell-status-dot" style={{ background: STATUS_DOT[link.status] ?? "#4a4f6a" }}/>
                   <span className="table-cell-title-text">{link.title}</span>
+                  {link.stealthAddress && (
+                    <span className="stealth-badge">🔒 stealth</span>
+                  )}
                 </div>
-                {link.description && (
-                  <p className="table-cell-description">{link.description}</p>
-                )}
+                {link.description && <p className="table-cell-description">{link.description}</p>}
                 {link.txHash && (
                   <a
                     href={`https://testnet.arcscan.app/tx/${link.txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    target="_blank" rel="noopener noreferrer"
                     className="table-cell-txhash"
                   >
                     {shortenAddress(link.txHash)} ↗
@@ -240,7 +224,7 @@ export function PaymentLinksTable({ refreshTrigger }: { refreshTrigger: number }
                   </>
                 )}
                 {link.status !== "ACTIVE" && (
-                  <span className="table-date" style={{ fontSize: 11, color: "#4a4f6a" }}>
+                  <span style={{ fontSize: 11, color: "#4a4f6a" }}>
                     {link.status === "COMPLETED" ? "Paid ✓" : "Cancelled"}
                   </span>
                 )}

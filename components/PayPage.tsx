@@ -16,12 +16,12 @@ interface PaymentLink {
   title: string;
   description?: string;
   amount: string;
-  stealthAddress?: string; // Payer sends here — real address never exposed
+  stealthAddress?: string | null;   // present if stealth mode enabled
+  recipientAddress?: string;         // present for non-stealth (from server component only)
   status: string;
   txHash?: string;
 }
 
-// Mask any address for display — shows enough to verify but not identify
 function maskAddress(address: string): string {
   if (!address || address.length < 10) return "••••••••";
   return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
@@ -40,8 +40,16 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const { switchChain } = useSwitchChain();
   const isOnArc = chainId === arcTestnet.id;
 
-  // Use stealth address for balance check
-  const paymentTarget = link.stealthAddress as `0x${string}` | undefined;
+  // Payment target:
+  // - Stealth link → send to stealthAddress (temp wallet)
+  // - Normal link → send to recipientAddress (real wallet)
+  const isStealthLink = !!link.stealthAddress;
+  const paymentTarget = (link.stealthAddress || link.recipientAddress) as `0x${string}` | undefined;
+  const displayAddress = link.stealthAddress
+    ? maskAddress(link.stealthAddress)
+    : link.recipientAddress
+    ? maskAddress(link.recipientAddress)
+    : "••••••••••••••••••";
 
   const { data: balance } = useBalance({ address, chainId: arcTestnet.id });
   const { sendTransaction, isPending } = useSendTransaction();
@@ -68,14 +76,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
         body: JSON.stringify({ txHash: hash, paidBy: payer }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Could not record payment.");
-        return;
-      }
+      if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
       setPaySuccess(true);
     } catch (e: any) {
       if (txConfirmed) setPaySuccess(true);
-      else setError("Network error recording payment. Save your tx hash.");
+      else setError("Network error. Transaction was sent — save your tx hash.");
     } finally {
       setIsMarkingPaid(false);
     }
@@ -83,16 +88,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   const handlePay = () => {
     if (!paymentTarget) {
-      setError("Payment target not available. Please try refreshing.");
+      setError("Payment target not available. Please refresh the page.");
       return;
     }
     setError("");
     sendTransaction(
-      {
-        to: paymentTarget,
-        value: parseEther(link.amount),
-        chainId: arcTestnet.id,
-      },
+      { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
       {
         onSuccess: (hash) => {
           setTxHash(hash);
@@ -123,12 +124,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
             <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Already Used</h2>
-            <p className="pay-success-desc">
-              This payment link has already been paid. Each link can only be used once.
-            </p>
-            <p style={{ fontSize: 12, color: "#4a4f6a", marginTop: 8 }}>
-              Ask the creator to generate a new link.
-            </p>
+            <p className="pay-success-desc">Each link can only be paid once. Ask the creator to generate a new link.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -145,7 +141,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
             <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Cancelled</h2>
-            <p className="pay-success-desc">This payment link has been cancelled.</p>
+            <p className="pay-success-desc">This payment link has been cancelled by the creator.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -153,7 +149,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Success ────────────────────────────────────────────────────────────────
+  // ── Payment success ────────────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
@@ -169,13 +165,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
             <strong style={{ color: "#f0f2ff" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
           </p>
           <p style={{ fontSize: 11, color: "#4a4f6a", textAlign: "center", marginBottom: 12 }}>
-            This link is now closed — it can only be used once.
+            This link is now closed — one-time use only.
           </p>
           {(txHash || link.txHash) && (
             <a
               href={`https://testnet.arcscan.app/tx/${txHash ?? link.txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              target="_blank" rel="noopener noreferrer"
               className="pay-success-txlink"
             >
               View on ArcScan ↗
@@ -215,12 +210,12 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-amount-desc">{link.description}</p>}
         </div>
 
-        {/* Details — stealth address shown, real address never revealed */}
+        {/* Details */}
         <div className="pay-details">
           <div className="pay-detail-row">
             <span className="pay-detail-label">Pay to</span>
             <span className="pay-detail-value mono" style={{ letterSpacing: "0.04em" }}>
-              {link.stealthAddress ? maskAddress(link.stealthAddress) : "••••••••••••••••••"}
+              {displayAddress}
             </span>
           </div>
           <div className="pay-detail-row">
@@ -234,29 +229,32 @@ export function PayPage({ link }: { link: PaymentLink }) {
             <span className="pay-detail-value mono">USDC (native)</span>
           </div>
           <div className="pay-detail-row">
-            <span className="pay-detail-label">Type</span>
-            <span className="pay-detail-value" style={{ color: "#f59e0b", fontSize: 11 }}>
-              One-time · Privacy protected
+            <span className="pay-detail-label">Privacy</span>
+            <span className="pay-detail-value" style={{ fontSize: 11, gap: 4 }}>
+              {isStealthLink ? (
+                <><span style={{ color: "#a78bfa" }}>🔒 Stealth mode</span></>
+              ) : (
+                <><span style={{ color: "#4a4f6a" }}>Standard</span></>
+              )}
             </span>
           </div>
         </div>
 
-        {/* Privacy notice */}
-        <div style={{
-          background: "rgba(59,130,246,0.05)",
-          border: "1px solid rgba(59,130,246,0.15)",
-          borderRadius: 8,
-          padding: "8px 12px",
-          marginBottom: 14,
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 8,
-        }}>
-          <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
-          <p style={{ fontSize: 11, color: "#6b7094", lineHeight: 1.5 }}>
-            Recipient identity is protected. Funds are routed through a privacy layer before delivery.
-          </p>
-        </div>
+        {/* Stealth notice */}
+        {isStealthLink && (
+          <div style={{
+            background: "rgba(139,92,246,0.06)",
+            border: "1px solid rgba(139,92,246,0.2)",
+            borderRadius: 8, padding: "8px 12px",
+            marginBottom: 14, display: "flex",
+            alignItems: "flex-start", gap: 8,
+          }}>
+            <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
+            <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
+              Privacy protected. Funds are routed through a temporary address before delivery.
+            </p>
+          </div>
+        )}
 
         {/* Action area */}
         {!mounted ? null : !isConnected ? (
@@ -274,20 +272,14 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div className="pay-confirming">
             <div className="pay-confirming-spinner"/>
             <p className="pay-confirming-text">
-              {isPending
-                ? "Confirm in MetaMask..."
-                : isWaiting
-                ? "Waiting for block confirmation..."
+              {isPending ? "Confirm in MetaMask..."
+                : isWaiting ? "Waiting for block confirmation..."
                 : "Recording payment..."}
             </p>
             {txHash && (
-              <a
-                href={`https://testnet.arcscan.app/tx/${txHash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pay-success-txlink"
-                style={{ marginTop: 8 }}
-              >
+              <a href={`https://testnet.arcscan.app/tx/${txHash}`}
+                target="_blank" rel="noopener noreferrer"
+                className="pay-success-txlink" style={{ marginTop: 8 }}>
                 Track on ArcScan ↗
               </a>
             )}
@@ -306,12 +298,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
                 Your balance:{" "}
                 <span className="pay-balance-amount">{bal.toFixed(4)} USDC</span>
                 {!hasEnough && (
-                  <>
-                    {" — "}
-                    <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-balance-faucet">
-                      get more from faucet
-                    </a>
-                  </>
+                  <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-balance-faucet">get more from faucet</a></>
                 )}
               </p>
             )}
