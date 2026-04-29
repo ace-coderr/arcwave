@@ -47,7 +47,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  // Fetch full record including stealth private key
   const link = await db.paymentLink.findUnique({
     where: { id: params.linkId },
     select: {
@@ -98,7 +97,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
       if (txTo !== expectedPaymentAddress) {
         return NextResponse.json(
-          { error: `Transaction sent to wrong address. Expected ${expectedPaymentAddress}, got ${txTo}.` },
+          { error: `Transaction sent to wrong address.` },
           { status: 400 }
         );
       }
@@ -125,7 +124,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     console.warn("[PATCH] Verification skipped:", verificationError);
   }
 
-  // Mark as COMPLETED first
+  // Mark as COMPLETED
   await db.paymentLink.update({
     where: { id: params.linkId },
     data: {
@@ -136,46 +135,41 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     },
   });
 
-  // ── STEALTH FORWARDING ────────────────────────────────────────────────────
-  // Run SYNCHRONOUSLY — await it so Vercel doesn't kill the process
-  // This runs BEFORE we return the response to the client
+  // ── Stealth forwarding ────────────────────────────────────────────────────
   let forwardResult = null;
 
   if (isStealthLink && link.stealthPrivateKey && link.recipientAddress) {
-    console.log(`[PATCH] Stealth forward starting for link ${params.linkId}`);
-    console.log(`[PATCH] Stealth address: ${link.stealthAddress}`);
-    console.log(`[PATCH] Real recipient: ${link.recipientAddress}`);
+    console.log(`[PATCH] Starting stealth forward for ${params.linkId}`);
 
-    // Retry up to 3 times with 2 second delay between attempts
-    // Needed because the block needs to settle before balance is available
+    // Retry up to 3 times
     for (let attempt = 1; attempt <= 3; attempt++) {
       console.log(`[PATCH] Forward attempt ${attempt}/3`);
 
-      // Wait for block to settle on first attempt
       if (attempt === 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Wait for block to fully settle
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
-      forwardResult = await forwardFunds(link.stealthPrivateKey!, link.recipientAddress);
+      // Pass payment amount so forwarder knows how much to expect
+      forwardResult = await forwardFunds(
+        link.stealthPrivateKey!,
+        link.recipientAddress,
+        link.amount
+      );
 
       if (forwardResult.success) {
-        console.log(`[PATCH] Forward success on attempt ${attempt}: ${forwardResult.txHash}`);
-        // Store forward tx hash
+        console.log(`[PATCH] Forward success: ${forwardResult.txHash}`);
         await db.paymentLink.update({
           where: { id: params.linkId },
           data: { forwardTxHash: forwardResult.txHash },
         });
         break;
       } else {
-        console.warn(`[PATCH] Forward attempt ${attempt} failed: ${forwardResult.error}`);
+        console.warn(`[PATCH] Attempt ${attempt} failed: ${forwardResult.error}`);
         if (attempt < 3) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
-    }
-
-    if (!forwardResult?.success) {
-      console.error(`[PATCH] All forward attempts failed for link ${params.linkId}`);
     }
   }
 

@@ -1,7 +1,6 @@
 // app/api/recover/route.ts
-// Emergency route to manually forward funds stuck in stealth wallets.
-// Only works for COMPLETED links that have stealthPrivateKey but no forwardTxHash.
-// Call this with: POST /api/recover { secret: "your_stealth_secret" }
+// Secure recovery route - only callable server-side with RECOVER_TOKEN
+// NOT exposed to frontend — call via Vercel Functions log or curl only
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -13,17 +12,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  // Simple auth — require the STEALTH_SECRET to prevent abuse
-  if (body.secret !== process.env.STEALTH_SECRET) {
+  // Use a separate RECOVER_TOKEN — not STEALTH_SECRET
+  // This way even if someone sees the recovery call, they can't decrypt private keys
+  const recoverToken = process.env.RECOVER_TOKEN;
+  if (!recoverToken || body.token !== recoverToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Find all completed stealth links that haven't been forwarded yet
+  // Find all completed stealth links not yet forwarded
   const stuckLinks = await db.paymentLink.findMany({
     where: {
       status: "COMPLETED",
       stealthPrivateKey: { not: null },
-      forwardTxHash: null, // not yet forwarded
+      forwardTxHash: null,
     },
   });
 
@@ -32,39 +33,35 @@ export async function POST(req: NextRequest) {
   const results = [];
 
   for (const link of stuckLinks) {
-    console.log(`[RECOVER] Processing link ${link.id} — stealth: ${link.stealthAddress}`);
-
     if (!link.stealthPrivateKey || !link.recipientAddress) {
       results.push({ id: link.id, success: false, error: "Missing keys" });
       continue;
     }
 
-    const result = await forwardFunds(link.stealthPrivateKey, link.recipientAddress);
+    const result = await forwardFunds(
+      link.stealthPrivateKey,
+      link.recipientAddress,
+      link.amount
+    );
 
     if (result.success && result.txHash) {
       await db.paymentLink.update({
         where: { id: link.id },
         data: { forwardTxHash: result.txHash },
       });
-      console.log(`[RECOVER] Forwarded ${link.id}: ${result.txHash}`);
     }
 
     results.push({
       id: link.id,
       title: link.title,
       amount: link.amount,
-      stealthAddress: link.stealthAddress,
       success: result.success,
       forwardTxHash: result.txHash,
       error: result.error,
     });
 
-    // Small delay between forwards
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  return NextResponse.json({
-    processed: results.length,
-    results,
-  });
+  return NextResponse.json({ processed: results.length, results });
 }
