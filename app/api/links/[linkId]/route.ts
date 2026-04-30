@@ -101,7 +101,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   console.log(`[PATCH] isStealthLink: ${isStealthLink}`);
   console.log(`[PATCH] expectedPaymentAddress: ${expectedPaymentAddress}`);
 
-  // Verify on-chain
+  // ── On-chain verification ─────────────────────────────────────────────────
   let verificationPassed = false;
   let verificationError = "";
 
@@ -126,7 +126,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       const requiredWei = parseEther(link.amount);
       if (tx.value < requiredWei) {
         const sentUsdc = parseFloat(formatEther(tx.value)).toFixed(4);
-        console.error(`[PATCH] Insufficient payment. Required ${link.amount}, got ${sentUsdc}`);
+        console.error(`[PATCH] Insufficient. Required ${link.amount}, got ${sentUsdc}`);
         return NextResponse.json(
           { error: `Insufficient payment. Required ${link.amount} USDC, received ${sentUsdc} USDC.` },
           { status: 400 }
@@ -135,21 +135,21 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       verificationPassed = true;
       console.log(`[PATCH] On-chain verification passed`);
     } else if (tx && !tx.blockNumber) {
-      console.log(`[PATCH] Tx pending`);
+      console.log(`[PATCH] Tx still pending`);
       return NextResponse.json(
         { error: "Transaction is still pending. Please wait and try again." },
         { status: 400 }
       );
     } else {
       verificationError = "Transaction not yet visible on chain.";
-      console.log(`[PATCH] Tx not visible yet`);
+      console.log(`[PATCH] Tx not visible yet — proceeding anyway`);
     }
   } catch (err: any) {
     verificationError = err?.message ?? "RPC unreachable";
     console.warn("[PATCH] Verification skipped:", verificationError);
   }
 
-  // Mark as COMPLETED
+  // ── Mark as COMPLETED ─────────────────────────────────────────────────────
   console.log(`[PATCH] Marking as COMPLETED`);
   await db.paymentLink.update({
     where: { id: params.linkId },
@@ -160,24 +160,36 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       paidAt: new Date(),
     },
   });
-  console.log(`[PATCH] Marked as COMPLETED`);
+  console.log(`[PATCH] Marked as COMPLETED successfully`);
 
-  // Stealth forwarding
+  // ── Stealth forwarding ────────────────────────────────────────────────────
   let forwardResult = null;
 
   if (isStealthLink && link.stealthPrivateKey && link.recipientAddress) {
-    console.log(`[PATCH] Starting stealth forward`);
+    console.log(`[PATCH] Stealth link — starting forward process`);
     console.log(`[PATCH] stealthAddress: ${link.stealthAddress}`);
     console.log(`[PATCH] recipientAddress: ${link.recipientAddress}`);
     console.log(`[PATCH] amount: ${link.amount}`);
     console.log(`[PATCH] hasForwarderKey: ${!!process.env.FORWARDER_PRIVATE_KEY}`);
 
+    // Wait for payer's transaction to be fully confirmed on-chain
+    // before checking the stealth wallet balance
+    console.log(`[PATCH] Waiting for tx to be confirmed on-chain...`);
+    try {
+      await arcPublicClient.waitForTransactionReceipt({
+        hash: txHash as `0x${string}`,
+        timeout: 30_000, // wait up to 30 seconds
+      });
+      console.log(`[PATCH] Tx confirmed on-chain. Stealth wallet should now have balance.`);
+    } catch (e: any) {
+      console.warn(`[PATCH] waitForTransactionReceipt timed out or failed: ${e.message}. Trying anyway...`);
+      // Wait 5 seconds as fallback
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+
+    // Retry forwarding up to 3 times
     for (let attempt = 1; attempt <= 3; attempt++) {
       console.log(`[PATCH] Forward attempt ${attempt}/3`);
-
-      if (attempt === 1) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
 
       forwardResult = await forwardFunds(
         link.stealthPrivateKey!,
@@ -188,16 +200,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       console.log(`[PATCH] Attempt ${attempt} result:`, JSON.stringify(forwardResult));
 
       if (forwardResult.success) {
+        // Save the forward tx hash
         await db.paymentLink.update({
           where: { id: params.linkId },
           data: { forwardTxHash: forwardResult.txHash },
         });
-        console.log(`[PATCH] Forward success! txHash: ${forwardResult.txHash}`);
+        console.log(`[PATCH] Forward success! forwardTxHash: ${forwardResult.txHash}`);
         break;
       } else {
         console.warn(`[PATCH] Attempt ${attempt} failed: ${forwardResult.error}`);
         if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Wait 3 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 3000));
         }
       }
     }
@@ -224,12 +238,12 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     verified: verificationPassed,
     message: isStealthLink
       ? forwardResult?.success
-        ? "Payment received and forwarded to recipient."
-        : "Payment received. Forwarding in progress."
+        ? "Payment received and forwarded to recipient. ✅"
+        : "Payment received. Forwarding failed — funds safe in stealth wallet."
       : "Payment received and confirmed.",
   };
 
-  console.log(`[PATCH] Returning response:`, JSON.stringify(response));
+  console.log(`[PATCH] Done. forwarded=${forwardResult?.success ?? false}`);
   return NextResponse.json(response);
 }
 
