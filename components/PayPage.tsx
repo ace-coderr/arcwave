@@ -16,8 +16,8 @@ interface PaymentLink {
   title: string;
   description?: string;
   amount: string;
-  stealthAddress?: string | null;   // present if stealth mode enabled
-  recipientAddress?: string;         // present for non-stealth (from server component only)
+  stealthAddress?: string | null;
+  recipientAddress?: string;
   status: string;
   txHash?: string;
 }
@@ -40,9 +40,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const { switchChain } = useSwitchChain();
   const isOnArc = chainId === arcTestnet.id;
 
-  // Payment target:
-  // - Stealth link → send to stealthAddress (temp wallet)
-  // - Normal link → send to recipientAddress (real wallet)
   const isStealthLink = !!link.stealthAddress;
   const paymentTarget = (link.stealthAddress || link.recipientAddress) as `0x${string}` | undefined;
   const displayAddress = link.stealthAddress
@@ -62,25 +59,55 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   useEffect(() => {
     if (txConfirmed && txHash && address && !paySuccess) {
+      console.log("[PayPage] tx confirmed on chain, calling markPaid:", txHash);
       markPaid(txHash, address);
     }
   }, [txConfirmed]);
 
   const markPaid = async (hash: string, payer: string) => {
+    console.log("[PayPage] markPaid called:", { hash, payer, linkId: link.id });
     setIsMarkingPaid(true);
     setError("");
+
     try {
-      const res = await fetch(`/api/links/${link.id}`, {
+      const url = `/api/links/${link.id}`;
+      const body = { txHash: hash, paidBy: payer };
+      console.log("[PayPage] PATCH", url, body);
+
+      const res = await fetch(url, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: hash, paidBy: payer }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
+
+      const text = await res.text();
+      console.log("[PayPage] PATCH response status:", res.status);
+      console.log("[PayPage] PATCH response body:", text);
+
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("[PayPage] Failed to parse response as JSON:", text);
+        setError("Server returned invalid response. Transaction was sent — save your tx hash.");
+        return;
+      }
+
+      if (!res.ok) {
+        console.error("[PayPage] PATCH failed:", data);
+        setError(data.error ?? "Could not record payment.");
+        return;
+      }
+
+      console.log("[PayPage] Payment recorded successfully:", data);
       setPaySuccess(true);
     } catch (e: any) {
-      if (txConfirmed) setPaySuccess(true);
-      else setError("Network error. Transaction was sent — save your tx hash.");
+      console.error("[PayPage] markPaid network error:", e);
+      if (txConfirmed) {
+        setPaySuccess(true);
+      } else {
+        setError("Network error. Transaction was sent — save your tx hash: " + hash);
+      }
     } finally {
       setIsMarkingPaid(false);
     }
@@ -88,24 +115,29 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   const handlePay = () => {
     if (!paymentTarget) {
+      console.error("[PayPage] No payment target available");
       setError("Payment target not available. Please refresh the page.");
       return;
     }
+    console.log("[PayPage] Initiating payment to:", paymentTarget, "amount:", link.amount);
     setError("");
+
     sendTransaction(
       { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
       {
         onSuccess: (hash) => {
+          console.log("[PayPage] Transaction submitted:", hash);
           setTxHash(hash);
           if (address) markPaid(hash, address);
         },
         onError: (err: Error) => {
+          console.error("[PayPage] Transaction error:", err.message);
           if (err.message?.includes("rejected") || err.message?.includes("denied")) {
             setError("Transaction was rejected in MetaMask.");
           } else if (err.message?.includes("insufficient")) {
             setError("Insufficient USDC balance.");
           } else {
-            setError("Transaction failed. Please try again.");
+            setError("Transaction failed: " + err.message);
           }
         },
       }
@@ -149,7 +181,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Payment success ────────────────────────────────────────────────────────
+  // ── Success ────────────────────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
@@ -200,7 +232,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
       <div className="pay-card">
         <div className="pay-card-top-line"/>
 
-        {/* Amount */}
         <div className="pay-amount-section">
           <div>
             <span className="pay-amount-value">{formatUSDC(link.amount)}</span>
@@ -210,7 +241,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-amount-desc">{link.description}</p>}
         </div>
 
-        {/* Details */}
         <div className="pay-details">
           <div className="pay-detail-row">
             <span className="pay-detail-label">Pay to</span>
@@ -230,24 +260,19 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
           <div className="pay-detail-row">
             <span className="pay-detail-label">Privacy</span>
-            <span className="pay-detail-value" style={{ fontSize: 11, gap: 4 }}>
-              {isStealthLink ? (
-                <><span style={{ color: "#a78bfa" }}>🔒 Stealth mode</span></>
-              ) : (
-                <><span style={{ color: "#4a4f6a" }}>Standard</span></>
-              )}
+            <span className="pay-detail-value" style={{ fontSize: 11 }}>
+              {isStealthLink
+                ? <span style={{ color: "#a78bfa" }}>🔒 Stealth mode</span>
+                : <span style={{ color: "#4a4f6a" }}>Standard</span>}
             </span>
           </div>
         </div>
 
-        {/* Stealth notice */}
         {isStealthLink && (
           <div style={{
-            background: "rgba(139,92,246,0.06)",
-            border: "1px solid rgba(139,92,246,0.2)",
-            borderRadius: 8, padding: "8px 12px",
-            marginBottom: 14, display: "flex",
-            alignItems: "flex-start", gap: 8,
+            background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)",
+            borderRadius: 8, padding: "8px 12px", marginBottom: 14,
+            display: "flex", alignItems: "flex-start", gap: 8,
           }}>
             <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
             <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
@@ -256,7 +281,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
-        {/* Action area */}
         {!mounted ? null : !isConnected ? (
           <button className="pay-btn-primary" onClick={() => connect({ connector: injected() })}>
             Connect Wallet to Pay
