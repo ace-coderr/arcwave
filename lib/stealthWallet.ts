@@ -34,6 +34,11 @@ export function decryptPrivateKey(encryptedData: string): string {
   return decrypted;
 }
 
+// Ensure private key always has 0x prefix — viem requires it
+function formatPrivateKey(key: string): `0x${string}` {
+  return (key.startsWith("0x") ? key : `0x${key}`) as `0x${string}`;
+}
+
 export function generateStealthWallet(): {
   address: string;
   encryptedPrivateKey: string;
@@ -46,31 +51,33 @@ export function generateStealthWallet(): {
   };
 }
 
-// ── Forward funds using a server-funded gas approach ─────────────────────────
-// Problem: stealth wallet only has the payment amount — no gas.
-// Solution: server sends a tiny gas amount to the stealth wallet first,
-// then the stealth wallet forwards everything minus gas to recipient.
-// REQUIRES: FORWARDER_PRIVATE_KEY env var (a funded server wallet for gas)
 export async function forwardFunds(
   encryptedPrivateKey: string,
   recipientAddress: string,
-  paymentAmount: string // human-readable amount e.g. "10"
+  paymentAmount: string
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   try {
     const forwarderKey = process.env.FORWARDER_PRIVATE_KEY;
 
     if (!forwarderKey) {
-      // Fallback: no forwarder key configured
-      // Just record it — manual recovery needed
       return {
         success: false,
         error: "FORWARDER_PRIVATE_KEY not configured. Funds safe in stealth wallet.",
       };
     }
 
-    const privateKey = decryptPrivateKey(encryptedPrivateKey);
-    const stealthAccount = privateKeyToAccount(privateKey as `0x${string}`);
-    const forwarderAccount = privateKeyToAccount(forwarderKey as `0x${string}`);
+    // Decrypt and format stealth private key with 0x prefix
+    const rawPrivateKey = decryptPrivateKey(encryptedPrivateKey);
+    const stealthPrivateKey = formatPrivateKey(rawPrivateKey);
+    const stealthAccount = privateKeyToAccount(stealthPrivateKey);
+
+    // Format forwarder key with 0x prefix
+    const forwarderPrivateKey = formatPrivateKey(forwarderKey);
+    const forwarderAccount = privateKeyToAccount(forwarderPrivateKey);
+
+    console.log(`[forward] Stealth address: ${stealthAccount.address}`);
+    console.log(`[forward] Forwarder address: ${forwarderAccount.address}`);
+    console.log(`[forward] Recipient: ${recipientAddress}`);
 
     const publicClient = createPublicClient({
       chain: arcTestnet,
@@ -94,24 +101,25 @@ export async function forwardFunds(
       address: stealthAccount.address,
     });
 
+    console.log(`[forward] Stealth balance: ${formatEther(stealthBalance)} USDC`);
+
     if (stealthBalance === BigInt(0)) {
-      return { success: false, error: "Stealth wallet balance is 0 — payment not yet confirmed." };
+      return {
+        success: false,
+        error: "Stealth wallet balance is 0 — payment not yet confirmed.",
+      };
     }
 
-    // Step 2: Estimate gas needed for the stealth → recipient transfer
+    // Step 2: Calculate gas cost
     const gasPrice = await publicClient.getGasPrice();
     const gasLimit = BigInt(21000);
     const gasCost = gasPrice * gasLimit;
+    const gasFunding = gasCost * BigInt(3); // send 3x to be safe
 
-    // Step 3: Fund stealth wallet with gas if it doesn't have enough
-    // We send 2x gas cost to be safe
-    const gasFunding = gasCost * BigInt(2);
+    console.log(`[forward] Gas cost: ${formatEther(gasCost)} USDC`);
+    console.log(`[forward] Sending gas funding: ${formatEther(gasFunding)} USDC`);
 
-    console.log(`[forward] Stealth balance: ${formatEther(stealthBalance)} USDC`);
-    console.log(`[forward] Gas cost needed: ${formatEther(gasCost)} USDC`);
-    console.log(`[forward] Funding stealth wallet with: ${formatEther(gasFunding)} USDC`);
-
-    // Send gas from forwarder to stealth wallet
+    // Step 3: Fund stealth wallet with gas from forwarder
     const fundTxHash = await forwarderClient.sendTransaction({
       to: stealthAccount.address,
       value: gasFunding,
@@ -119,24 +127,30 @@ export async function forwardFunds(
 
     console.log(`[forward] Gas funding tx: ${fundTxHash}`);
 
-    // Wait for funding tx to confirm
+    // Wait for gas funding to confirm
     await publicClient.waitForTransactionReceipt({ hash: fundTxHash });
     console.log(`[forward] Gas funding confirmed`);
 
-    // Step 4: Get updated balance after funding
-    const newBalance = await publicClient.getBalance({
+    // Step 4: Get updated balance after gas funding
+    const balanceAfterFunding = await publicClient.getBalance({
       address: stealthAccount.address,
     });
 
-    // Step 5: Forward all funds minus gas from stealth → recipient
-    const amountToForward = newBalance - gasCost;
+    console.log(`[forward] Balance after funding: ${formatEther(balanceAfterFunding)} USDC`);
+
+    // Step 5: Calculate amount to forward (all funds minus one gas cost)
+    const amountToForward = balanceAfterFunding - gasCost;
 
     if (amountToForward <= BigInt(0)) {
-      return { success: false, error: "Not enough balance to forward after gas." };
+      return {
+        success: false,
+        error: "Not enough balance to forward after gas.",
+      };
     }
 
-    console.log(`[forward] Forwarding ${formatEther(amountToForward)} USDC to ${recipientAddress}`);
+    console.log(`[forward] Forwarding: ${formatEther(amountToForward)} USDC to ${recipientAddress}`);
 
+    // Step 6: Send all funds from stealth wallet to real recipient
     const forwardTxHash = await stealthClient.sendTransaction({
       to: recipientAddress as `0x${string}`,
       value: amountToForward,
@@ -144,13 +158,13 @@ export async function forwardFunds(
 
     console.log(`[forward] Forward tx: ${forwardTxHash}`);
 
-    // Wait for forward confirmation
+    // Wait for forward to confirm
     await publicClient.waitForTransactionReceipt({ hash: forwardTxHash });
     console.log(`[forward] Forward confirmed!`);
 
     return { success: true, txHash: forwardTxHash };
   } catch (err: any) {
-    console.error("[forwardFunds] Error:", err);
+    console.error("[forwardFunds] Error:", err.message);
     return { success: false, error: err.message ?? "Forwarding failed" };
   }
 }
