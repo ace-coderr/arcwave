@@ -6,10 +6,9 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { useEffect, useState } from "react";
 
-// ── social links ──
 const SOCIAL = {
-  x:        "https://x.com/arcwave_app",
-  telegram: "https://t.me/arcwave_app",
+  x: "https://x.com/conduit_app",
+  telegram: "https://t.me/conduit_community",
 };
 
 const NAV = [
@@ -55,28 +54,45 @@ export function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
 
-  useEffect(() => { setMounted(true); }, []);
-  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem("conduit-theme");
+    setIsDark(saved !== "light");
+  }, []);
+
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("conduit-theme", "dark");
+    } else {
+      document.documentElement.setAttribute("data-theme", "light");
+      localStorage.setItem("conduit-theme", "light");
+    }
+  };
 
   const short = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
-  const sidebarContent = (
+  const content = (
     <div className="sidebar-inner">
       {/* Logo */}
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">
-          <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
-            <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
-              stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+          <svg viewBox="0 0 20 20" fill="none" width="14" height="14">
+            <rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/>
+            <rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/>
           </svg>
         </div>
         <div>
-          <div className="sidebar-logo-name">Arc<span>Wave</span></div>
+          <div className="sidebar-logo-name">Conduit</div>
           <div className="sidebar-logo-badge">
             <span className="sidebar-logo-dot pulse-dot"/>
             TESTNET
@@ -125,23 +141,19 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Resources + Social */}
+      {/* Resources + social */}
       <div className="sidebar-resources">
         <div className="sidebar-section-label">RESOURCES</div>
         <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="sidebar-resource-link">
-          <span>Faucet</span>
-          <span className="sidebar-resource-arrow">↗</span>
+          <span>Get USDC</span><span className="sidebar-resource-arrow">↗</span>
         </a>
         <a href="https://testnet.arcscan.app" target="_blank" rel="noopener noreferrer" className="sidebar-resource-link">
-          <span>Explorer</span>
-          <span className="sidebar-resource-arrow">↗</span>
+          <span>Explorer</span><span className="sidebar-resource-arrow">↗</span>
         </a>
 
-        {/* Social links */}
-        <div className="sidebar-section-label sidebar-community-label">COMMUNITY</div>
+        <div className="sidebar-section-label" style={{ marginTop: 12 }}>COMMUNITY</div>
         <a href={SOCIAL.x} target="_blank" rel="noopener noreferrer" className="sidebar-resource-link sidebar-social-link">
           <span className="sidebar-social-icon">
-            {/* X (Twitter) icon */}
             <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.845L1.255 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
             </svg>
@@ -151,7 +163,6 @@ export function Sidebar() {
         </a>
         <a href={SOCIAL.telegram} target="_blank" rel="noopener noreferrer" className="sidebar-resource-link sidebar-social-link">
           <span className="sidebar-social-icon">
-            {/* Telegram icon */}
             <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
               <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.94-.918c-.64-.203-.654-.64.136-.954l11.49-4.43c.532-.194.998.131.838.856z"/>
             </svg>
@@ -160,12 +171,30 @@ export function Sidebar() {
           <span className="sidebar-resource-arrow">↗</span>
         </a>
 
-        {/* Network info */}
+        {/* Theme toggle */}
+        {mounted && (
+          <div className="theme-toggle">
+            <span className="theme-toggle-label">
+              {isDark ? "🌙" : "☀️"}
+              {isDark ? "Dark" : "Light"}
+            </span>
+            <label className="theme-switch">
+              <input
+                type="checkbox"
+                checked={!isDark}
+                onChange={toggleTheme}
+              />
+              <span className="theme-slider"/>
+            </label>
+          </div>
+        )}
+
+        {/* Network */}
         <div className="sidebar-network-card">
           <div className="sidebar-network-icon">
-            <svg viewBox="0 0 14 14" fill="none" width="11" height="11">
-              <circle cx="7" cy="7" r="5.5" stroke="#3b82f6" strokeWidth="1.2"/>
-              <path d="M7 4.5v2.5l1.5 1" stroke="#3b82f6" strokeWidth="1.2" strokeLinecap="round"/>
+            <svg viewBox="0 0 14 14" fill="none" width="10" height="10">
+              <circle cx="7" cy="7" r="5.5" stroke="#00C896" strokeWidth="1.2"/>
+              <path d="M7 4.5v2.5l1.5 1" stroke="#00C896" strokeWidth="1.2" strokeLinecap="round"/>
             </svg>
           </div>
           <div>
@@ -179,27 +208,20 @@ export function Sidebar() {
 
   return (
     <>
-      {/* ── Desktop sidebar ── */}
-      <aside className="sidebar sidebar-desktop">
-        {sidebarContent}
-      </aside>
+      <aside className="sidebar sidebar-desktop">{content}</aside>
 
-      {/* ── Mobile top bar ── */}
+      {/* Mobile topbar */}
       <div className="mobile-topbar">
         <div className="mobile-topbar-logo">
-          <div className="sidebar-logo-icon mobile-topbar-logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" width="11" height="11">
-              <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
-                stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+          <div className="sidebar-logo-icon" style={{ width: 26, height: 26, borderRadius: 7 }}>
+            <svg viewBox="0 0 20 20" fill="none" width="11" height="11">
+              <rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/>
+              <rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/>
             </svg>
           </div>
-          <span className="mobile-topbar-name">Arc<span>Wave</span></span>
+          <span className="mobile-topbar-name">Conduit</span>
         </div>
-        <button
-          className="mobile-hamburger"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle menu"
-        >
+        <button className="mobile-hamburger" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
           {mobileOpen ? (
             <svg viewBox="0 0 24 24" fill="none" width="20" height="20">
               <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
@@ -212,15 +234,8 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* ── Mobile drawer overlay ── */}
-      {mobileOpen && (
-        <div className="mobile-overlay" onClick={() => setMobileOpen(false)} />
-      )}
-
-      {/* ── Mobile drawer ── */}
-      <aside className={`sidebar sidebar-mobile${mobileOpen ? " open" : ""}`}>
-        {sidebarContent}
-      </aside>
+      {mobileOpen && <div className="mobile-overlay" onClick={() => setMobileOpen(false)}/>}
+      <aside className={`sidebar sidebar-mobile${mobileOpen ? " open" : ""}`}>{content}</aside>
     </>
   );
 }
