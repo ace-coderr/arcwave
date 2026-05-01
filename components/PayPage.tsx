@@ -33,6 +33,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const [error, setError] = useState("");
   const [paySuccess, setPaySuccess] = useState(link.status === "COMPLETED");
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [forwardStatus, setForwardStatus] = useState<"idle" | "pending" | "done" | "failed">("idle");
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -57,12 +58,36 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // When tx is confirmed on-chain, mark as paid then trigger forward
   useEffect(() => {
     if (txConfirmed && txHash && address && !paySuccess) {
-      console.log("[PayPage] tx confirmed on chain, calling markPaid:", txHash);
+      console.log("[PayPage] tx confirmed on chain:", txHash);
       markPaid(txHash, address);
     }
   }, [txConfirmed]);
+
+  const triggerForward = async (linkId: string) => {
+    console.log("[PayPage] Triggering stealth forward for:", linkId);
+    setForwardStatus("pending");
+    try {
+      const res = await fetch("/api/forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkId }),
+      });
+      const data = await res.json();
+      console.log("[PayPage] Forward result:", data);
+      if (data.success) {
+        setForwardStatus("done");
+      } else {
+        setForwardStatus("failed");
+        console.error("[PayPage] Forward failed:", data.error);
+      }
+    } catch (e) {
+      console.error("[PayPage] Forward network error:", e);
+      setForwardStatus("failed");
+    }
+  };
 
   const markPaid = async (hash: string, payer: string) => {
     console.log("[PayPage] markPaid called:", { hash, payer, linkId: link.id });
@@ -70,41 +95,40 @@ export function PayPage({ link }: { link: PaymentLink }) {
     setError("");
 
     try {
-      const url = `/api/links/${link.id}`;
-      const body = { txHash: hash, paidBy: payer };
-      console.log("[PayPage] PATCH", url, body);
-
-      const res = await fetch(url, {
+      const res = await fetch(`/api/links/${link.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ txHash: hash, paidBy: payer }),
       });
 
       const text = await res.text();
-      console.log("[PayPage] PATCH response status:", res.status);
-      console.log("[PayPage] PATCH response body:", text);
+      console.log("[PayPage] PATCH status:", res.status, "body:", text);
 
       let data: any;
       try {
         data = JSON.parse(text);
       } catch {
-        console.error("[PayPage] Failed to parse response as JSON:", text);
-        setError("Server returned invalid response. Transaction was sent — save your tx hash.");
+        setError("Server error. Transaction was sent — save your tx hash: " + hash);
         return;
       }
 
       if (!res.ok) {
-        console.error("[PayPage] PATCH failed:", data);
         setError(data.error ?? "Could not record payment.");
         return;
       }
 
-      console.log("[PayPage] Payment recorded successfully:", data);
+      console.log("[PayPage] Payment recorded. requiresForward:", data.requiresForward);
       setPaySuccess(true);
+
+      // If stealth link, call /api/forward separately
+      if (data.requiresForward) {
+        triggerForward(link.id);
+      }
     } catch (e: any) {
-      console.error("[PayPage] markPaid network error:", e);
+      console.error("[PayPage] markPaid error:", e);
       if (txConfirmed) {
         setPaySuccess(true);
+        if (isStealthLink) triggerForward(link.id);
       } else {
         setError("Network error. Transaction was sent — save your tx hash: " + hash);
       }
@@ -115,29 +139,25 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   const handlePay = () => {
     if (!paymentTarget) {
-      console.error("[PayPage] No payment target available");
       setError("Payment target not available. Please refresh the page.");
       return;
     }
-    console.log("[PayPage] Initiating payment to:", paymentTarget, "amount:", link.amount);
     setError("");
-
     sendTransaction(
       { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
       {
         onSuccess: (hash) => {
-          console.log("[PayPage] Transaction submitted:", hash);
+          console.log("[PayPage] tx submitted:", hash);
           setTxHash(hash);
           if (address) markPaid(hash, address);
         },
         onError: (err: Error) => {
-          console.error("[PayPage] Transaction error:", err.message);
           if (err.message?.includes("rejected") || err.message?.includes("denied")) {
             setError("Transaction was rejected in MetaMask.");
           } else if (err.message?.includes("insufficient")) {
             setError("Insufficient USDC balance.");
           } else {
-            setError("Transaction failed: " + err.message);
+            setError("Transaction failed. Please try again.");
           }
         },
       }
@@ -196,6 +216,38 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <p className="pay-success-desc">
             <strong style={{ color: "#f0f2ff" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
           </p>
+
+          {/* Stealth forward status */}
+          {isStealthLink && (
+            <div style={{
+              margin: "10px 0",
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 11,
+              textAlign: "center",
+              background: forwardStatus === "done"
+                ? "rgba(16,185,129,0.08)"
+                : forwardStatus === "failed"
+                ? "rgba(239,68,68,0.08)"
+                : "rgba(139,92,246,0.08)",
+              color: forwardStatus === "done"
+                ? "#34d399"
+                : forwardStatus === "failed"
+                ? "#f87171"
+                : "#a78bfa",
+              border: `1px solid ${forwardStatus === "done"
+                ? "rgba(16,185,129,0.2)"
+                : forwardStatus === "failed"
+                ? "rgba(239,68,68,0.2)"
+                : "rgba(139,92,246,0.2)"}`,
+            }}>
+              {forwardStatus === "idle" && "🔒 Processing privacy layer..."}
+              {forwardStatus === "pending" && "🔒 Forwarding through privacy layer..."}
+              {forwardStatus === "done" && "✅ Delivered to recipient"}
+              {forwardStatus === "failed" && "⚠️ Forward pending — funds are safe"}
+            </div>
+          )}
+
           <p style={{ fontSize: 11, color: "#4a4f6a", textAlign: "center", marginBottom: 12 }}>
             This link is now closed — one-time use only.
           </p>
@@ -338,7 +390,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
       </div>
-
       <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );
