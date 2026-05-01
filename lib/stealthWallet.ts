@@ -36,7 +36,11 @@ export function decryptPrivateKey(encryptedData: string): string {
 
 // Ensure private key always has 0x prefix — viem requires it
 function formatPrivateKey(key: string): `0x${string}` {
-  return (key.startsWith("0x") ? key : `0x${key}`) as `0x${string}`;
+  const cleaned = key.trim().replace(/\s/g, "");
+  const stripped = cleaned.startsWith("0x") || cleaned.startsWith("0X")
+    ? cleaned.slice(2)
+    : cleaned;
+  return `0x${stripped}` as `0x${string}`;
 }
 
 export function generateStealthWallet(): {
@@ -62,16 +66,15 @@ export async function forwardFunds(
     if (!forwarderKey) {
       return {
         success: false,
-        error: "FORWARDER_PRIVATE_KEY not configured. Funds safe in stealth wallet.",
+        error: "FORWARDER_PRIVATE_KEY not configured.",
       };
     }
 
-    // Decrypt and format stealth private key with 0x prefix
+    // Format private keys with 0x prefix
     const rawPrivateKey = decryptPrivateKey(encryptedPrivateKey);
     const stealthPrivateKey = formatPrivateKey(rawPrivateKey);
     const stealthAccount = privateKeyToAccount(stealthPrivateKey);
 
-    // Format forwarder key with 0x prefix
     const forwarderPrivateKey = formatPrivateKey(forwarderKey);
     const forwarderAccount = privateKeyToAccount(forwarderPrivateKey);
 
@@ -96,11 +99,23 @@ export async function forwardFunds(
       transport: http("https://rpc.testnet.arc.network"),
     });
 
-    // Step 1: Check stealth wallet balance
+    // Step 1: Check forwarder balance first
+    const forwarderBalance = await publicClient.getBalance({
+      address: forwarderAccount.address,
+    });
+    console.log(`[forward] Forwarder balance: ${formatEther(forwarderBalance)} USDC`);
+
+    if (forwarderBalance === BigInt(0)) {
+      return {
+        success: false,
+        error: "Forwarder wallet has no USDC to pay gas.",
+      };
+    }
+
+    // Step 2: Check stealth wallet balance
     const stealthBalance = await publicClient.getBalance({
       address: stealthAccount.address,
     });
-
     console.log(`[forward] Stealth balance: ${formatEther(stealthBalance)} USDC`);
 
     if (stealthBalance === BigInt(0)) {
@@ -110,57 +125,73 @@ export async function forwardFunds(
       };
     }
 
-    // Step 2: Calculate gas cost
+    // Step 3: Get current gas price
     const gasPrice = await publicClient.getGasPrice();
     const gasLimit = BigInt(21000);
     const gasCost = gasPrice * gasLimit;
-    const gasFunding = gasCost * BigInt(3); // send 3x to be safe
 
-    console.log(`[forward] Gas cost: ${formatEther(gasCost)} USDC`);
-    console.log(`[forward] Sending gas funding: ${formatEther(gasFunding)} USDC`);
+    // Use 5x gas cost as funding — very safe buffer
+    const gasFunding = gasCost * BigInt(5);
 
-    // Step 3: Fund stealth wallet with gas from forwarder
+    console.log(`[forward] gasPrice: ${gasPrice}`);
+    console.log(`[forward] gasCost: ${formatEther(gasCost)} USDC`);
+    console.log(`[forward] gasFunding (5x): ${formatEther(gasFunding)} USDC`);
+    console.log(`[forward] Forwarder sending gas to stealth wallet...`);
+
+    // Step 4: Fund stealth wallet with gas from forwarder
     const fundTxHash = await forwarderClient.sendTransaction({
       to: stealthAccount.address,
       value: gasFunding,
     });
 
-    console.log(`[forward] Gas funding tx: ${fundTxHash}`);
+    console.log(`[forward] Gas funding tx sent: ${fundTxHash}`);
 
     // Wait for gas funding to confirm
-    await publicClient.waitForTransactionReceipt({ hash: fundTxHash });
+    await publicClient.waitForTransactionReceipt({
+      hash: fundTxHash,
+      timeout: 20_000,
+    });
     console.log(`[forward] Gas funding confirmed`);
 
-    // Step 4: Get updated balance after gas funding
+    // Step 5: Get updated stealth balance after gas funding
     const balanceAfterFunding = await publicClient.getBalance({
       address: stealthAccount.address,
     });
+    console.log(`[forward] Stealth balance after funding: ${formatEther(balanceAfterFunding)} USDC`);
 
-    console.log(`[forward] Balance after funding: ${formatEther(balanceAfterFunding)} USDC`);
+    // Step 6: Calculate amount to forward
+    // Subtract 3x gas cost as buffer so stealth wallet can definitely pay gas
+    const gasCostBuffer = gasCost * BigInt(3);
+    const amountToForward = balanceAfterFunding - gasCostBuffer;
 
-    // Step 5: Calculate amount to forward (all funds minus one gas cost)
-    const amountToForward = balanceAfterFunding - gasCost;
+    console.log(`[forward] gasCostBuffer (3x): ${formatEther(gasCostBuffer)} USDC`);
+    console.log(`[forward] amountToForward: ${formatEther(amountToForward)} USDC`);
 
     if (amountToForward <= BigInt(0)) {
       return {
         success: false,
-        error: "Not enough balance to forward after gas.",
+        error: `Not enough balance to forward. Balance: ${formatEther(balanceAfterFunding)}, buffer: ${formatEther(gasCostBuffer)}`,
       };
     }
 
-    console.log(`[forward] Forwarding: ${formatEther(amountToForward)} USDC to ${recipientAddress}`);
+    // Step 7: Forward from stealth wallet to real recipient
+    console.log(`[forward] Sending ${formatEther(amountToForward)} USDC to ${recipientAddress}`);
 
-    // Step 6: Send all funds from stealth wallet to real recipient
     const forwardTxHash = await stealthClient.sendTransaction({
       to: recipientAddress as `0x${string}`,
       value: amountToForward,
+      gas: gasLimit,
+      gasPrice: gasPrice,
     });
 
-    console.log(`[forward] Forward tx: ${forwardTxHash}`);
+    console.log(`[forward] Forward tx sent: ${forwardTxHash}`);
 
     // Wait for forward to confirm
-    await publicClient.waitForTransactionReceipt({ hash: forwardTxHash });
-    console.log(`[forward] Forward confirmed!`);
+    await publicClient.waitForTransactionReceipt({
+      hash: forwardTxHash,
+      timeout: 20_000,
+    });
+    console.log(`[forward] Forward confirmed! Done.`);
 
     return { success: true, txHash: forwardTxHash };
   } catch (err: any) {
