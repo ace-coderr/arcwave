@@ -69,19 +69,19 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   useEffect(() => {
     if (txConfirmed && txHash && address && !paySuccess) {
-      markPaid(txHash, address);
+      markPaid(txHash, address, "arc");
     }
   }, [txConfirmed]);
 
   // ── Record payment in DB ──────────────────────────────────────
-  const markPaid = async (hash: string, payer: string) => {
+  const markPaid = async (hash: string, payer: string, type: "arc" | "unified" = "arc") => {
     setIsMarkingPaid(true);
     setError("");
     try {
       const res = await fetch(`/api/links/${link.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: hash, paidBy: payer }),
+        body: JSON.stringify({ txHash: hash, paidBy: payer, paymentType: type }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
@@ -121,7 +121,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
       {
         onSuccess: (hash) => {
           setTxHash(hash);
-          if (address) markPaid(hash, address);
+          if (address) markPaid(hash, address, "arc");
         },
         onError: (err: Error) => {
           if (err.message?.includes("rejected") || err.message?.includes("denied")) {
@@ -151,6 +151,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     setUnifiedStep("depositing");
 
     try {
+      // Switch MetaMask to source chain
       const targetChainId = CHAIN_IDS[selectedChain];
       if (targetChainId && window.ethereum) {
         try {
@@ -178,14 +179,13 @@ export function PayPage({ link }: { link: PaymentLink }) {
         amount: link.amount,
         token: "USDC",
       });
-      console.log("[Unified] depositResult keys:", Object.keys(depositResult ?? {}));
-      console.log("[Unified] depositResult full:", JSON.stringify(depositResult));
+      console.log("[Unified] depositResult:", JSON.stringify(depositResult));
 
       const depositHash = extractHash(depositResult);
       setUnifiedTxHash(depositHash);
       setUnifiedStep("spending");
 
-      // Step 2: Spend
+      // Step 2: Spend to Arc
       console.log(`[Unified] Spending ${link.amount} USDC to ${recipientAddr} on Arc Testnet`);
       const spendResult = await kit.unifiedBalance.spend({
         from: { adapter },
@@ -196,34 +196,16 @@ export function PayPage({ link }: { link: PaymentLink }) {
           recipientAddress: recipientAddr,
         },
       });
-      console.log("[Unified] spendResult keys:", Object.keys(spendResult ?? {}));
-      console.log("[Unified] spendResult full:", JSON.stringify(spendResult));
+      console.log("[Unified] spendResult:", JSON.stringify(spendResult));
 
       setUnifiedStep("recording");
 
-      // Step 3: Record — always use a valid hash, never fail silently
+      // Step 3: Record in DB with paymentType "unified" — skips Arc verification
       const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
       console.log("[Unified] finalHash:", finalHash);
-      console.log("[Unified] address:", address);
-      console.log("[Unified] link.id:", link.id);
 
-      // Call API directly so we can see the exact response
-      const patchRes = await fetch(`/api/links/${link.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: finalHash, paidBy: address }),
-      });
-      const patchData = await patchRes.json();
-      console.log("[Unified] PATCH status:", patchRes.status);
-      console.log("[Unified] PATCH response:", JSON.stringify(patchData));
-
-      if (patchRes.ok) {
-        setPaySuccess(true);
-        setUnifiedStep("done");
-      } else {
-        setUnifiedError(patchData.error ?? "Payment sent but could not close link.");
-        setUnifiedStep("failed");
-      }
+      if (address) await markPaid(finalHash, address, "unified");
+      setUnifiedStep("done");
 
     } catch (err: any) {
       console.error("[Unified] Error:", err.message);
@@ -236,13 +218,13 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const hasEnough = bal >= parseFloat(link.amount);
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
 
+  // ── Already used ──────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
         <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
         <p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card">
-          <div className="pay-card-bar"/>
+        <div className="pay-card"><div className="pay-card-bar"/>
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Already Used</p>
@@ -254,13 +236,13 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Cancelled ─────────────────────────────────────────────────
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
         <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
         <p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card">
-          <div className="pay-card-bar"/>
+        <div className="pay-card"><div className="pay-card-bar"/>
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>❌</div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Cancelled</p>
@@ -272,13 +254,13 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Success ───────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
         <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
         <p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card">
-          <div className="pay-card-bar"/>
+        <div className="pay-card"><div className="pay-card-bar"/>
           <div className="pay-actions" style={{ textAlign: "center" }}>
             <div className="pay-success-icon">
               <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
@@ -303,6 +285,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Main pay UI ───────────────────────────────────────────────
   return (
     <div className="pay-page">
       <div className="pay-logo">
@@ -329,18 +312,9 @@ export function PayPage({ link }: { link: PaymentLink }) {
         </div>
 
         <div className="pay-details">
-          <div className="pay-detail">
-            <span className="pay-detail-k">Pay to</span>
-            <span className="pay-detail-v">{displayAddress}</span>
-          </div>
-          <div className="pay-detail">
-            <span className="pay-detail-k">Network</span>
-            <span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span>
-          </div>
-          <div className="pay-detail">
-            <span className="pay-detail-k">Token</span>
-            <span className="pay-detail-v">USDC (native)</span>
-          </div>
+          <div className="pay-detail"><span className="pay-detail-k">Pay to</span><span className="pay-detail-v">{displayAddress}</span></div>
+          <div className="pay-detail"><span className="pay-detail-k">Network</span><span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span></div>
+          <div className="pay-detail"><span className="pay-detail-k">Token</span><span className="pay-detail-v">USDC (native)</span></div>
           <div className="pay-detail">
             <span className="pay-detail-k">Privacy</span>
             <span className="pay-detail-v" style={{ fontSize: 11 }}>
@@ -356,6 +330,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
+        {/* ── Arc mode ─────────────────────────────────────────── */}
         {payMode === "arc" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
@@ -391,6 +366,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
+        {/* ── Unified Balance mode ──────────────────────────────── */}
         {payMode === "unified" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>

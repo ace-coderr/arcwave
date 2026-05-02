@@ -38,9 +38,9 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { txHash, paidBy } = body;
+  const { txHash, paidBy, paymentType } = body;
+  const isUnified = paymentType === "unified";
 
-  // Allow any non-empty hash — including unified payment hashes like "0x_unified_..."
   if (!txHash) {
     return NextResponse.json(
       { error: "A transaction hash is required." },
@@ -74,13 +74,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   const isStealthLink = !!link.stealthAddress;
-
-  // Only verify on-chain for standard Arc transactions (0x + 64 hex chars)
-  // Skip verification for unified balance payments which use cross-chain hashes
-  const isStandardHash = /^0x[0-9a-fA-F]{64}$/.test(txHash);
   let verificationPassed = false;
 
-  if (isStandardHash) {
+  // Skip on-chain verification for unified payments —
+  // the tx goes through Circle's Gateway contract, not directly to recipient
+  if (isUnified) {
+    console.log(`[PATCH] Unified payment — skipping Arc verification`);
+    verificationPassed = true;
+  } else {
+    // Standard Arc payment — verify on-chain
     try {
       const expectedPaymentAddress = isStealthLink
         ? link.stealthAddress!.toLowerCase()
@@ -118,10 +120,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     } catch (err: any) {
       console.warn("[PATCH] On-chain verification skipped:", err?.message);
     }
-  } else {
-    // Unified balance payment — trust the client, skip on-chain check
-    console.log(`[PATCH] Unified payment hash detected: ${txHash} — skipping Arc verification`);
-    verificationPassed = true;
   }
 
   // Mark as COMPLETED
@@ -135,7 +133,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     },
   });
 
-  console.log(`[PATCH] Marked COMPLETED. isStealthLink=${isStealthLink}`);
+  console.log(`[PATCH] Marked COMPLETED. isStealthLink=${isStealthLink} isUnified=${isUnified}`);
 
   return NextResponse.json({
     success: true,
@@ -148,8 +146,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       isStealthLink,
     },
     verified: verificationPassed,
-    requiresForward: isStealthLink,
-    message: isStealthLink
+    requiresForward: isStealthLink && !isUnified,
+    message: isUnified
+      ? "Payment received via Unified Balance."
+      : isStealthLink
       ? "Payment received. Forwarding in progress..."
       : "Payment received and confirmed.",
   });
