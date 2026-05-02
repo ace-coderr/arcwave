@@ -10,6 +10,7 @@ import { injected } from "wagmi/connectors";
 import { parseEther, formatEther } from "viem";
 import { arcTestnet } from "@/lib/arcChain";
 import { formatUSDC } from "@/lib/utils";
+import { SOURCE_CHAINS, type SourceChainId, getAppKit, createBrowserAdapter } from "@/lib/appKit";
 
 interface PaymentLink {
   id: string;
@@ -27,13 +28,22 @@ function maskAddress(address: string): string {
   return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
 }
 
+type PayMode = "arc" | "unified";
+type UnifiedStep = "idle" | "depositing" | "spending" | "recording" | "done" | "failed";
+
 export function PayPage({ link }: { link: PaymentLink }) {
   const [mounted, setMounted] = useState(false);
+  const [payMode, setPayMode] = useState<PayMode>("arc");
+  const [selectedChain, setSelectedChain] = useState<SourceChainId>("Base_Sepolia");
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
   const [error, setError] = useState("");
   const [paySuccess, setPaySuccess] = useState(link.status === "COMPLETED");
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
-  const [forwardStatus, setForwardStatus] = useState<"idle" | "pending" | "done" | "failed">("idle");
+
+  // Unified Balance states
+  const [unifiedStep, setUnifiedStep] = useState<UnifiedStep>("idle");
+  const [unifiedTxHash, setUnifiedTxHash] = useState("");
+  const [unifiedError, setUnifiedError] = useState("");
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -58,102 +68,56 @@ export function PayPage({ link }: { link: PaymentLink }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // When tx is confirmed on-chain, mark as paid then trigger forward
   useEffect(() => {
     if (txConfirmed && txHash && address && !paySuccess) {
-      console.log("[PayPage] tx confirmed on chain:", txHash);
       markPaid(txHash, address);
     }
   }, [txConfirmed]);
 
-  const triggerForward = async (linkId: string) => {
-    console.log("[PayPage] Triggering stealth forward for:", linkId);
-    setForwardStatus("pending");
-    try {
-      const res = await fetch("/api/forward", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkId }),
-      });
-      const data = await res.json();
-      console.log("[PayPage] Forward result:", data);
-      if (data.success) {
-        setForwardStatus("done");
-      } else {
-        setForwardStatus("failed");
-        console.error("[PayPage] Forward failed:", data.error);
-      }
-    } catch (e) {
-      console.error("[PayPage] Forward network error:", e);
-      setForwardStatus("failed");
-    }
-  };
-
+  // ── Record payment in DB ──────────────────────────────────────
   const markPaid = async (hash: string, payer: string) => {
-    console.log("[PayPage] markPaid called:", { hash, payer, linkId: link.id });
     setIsMarkingPaid(true);
     setError("");
-
     try {
       const res = await fetch(`/api/links/${link.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ txHash: hash, paidBy: payer }),
       });
-
-      const text = await res.text();
-      console.log("[PayPage] PATCH status:", res.status, "body:", text);
-
-      let data: any;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        setError("Server error. Transaction was sent — save your tx hash: " + hash);
-        return;
-      }
-
-      if (!res.ok) {
-        setError(data.error ?? "Could not record payment.");
-        return;
-      }
-
-      console.log("[PayPage] Payment recorded. requiresForward:", data.requiresForward);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
       setPaySuccess(true);
 
-      // If stealth link, call /api/forward separately
+      // Trigger stealth forward if needed
       if (data.requiresForward) {
-        triggerForward(link.id);
+        fetch("/api/forward", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ linkId: link.id }),
+        }).catch(console.error);
       }
     } catch (e: any) {
-      console.error("[PayPage] markPaid error:", e);
-      if (txConfirmed) {
-        setPaySuccess(true);
-        if (isStealthLink) triggerForward(link.id);
-      } else {
-        setError("Network error. Transaction was sent — save your tx hash: " + hash);
-      }
+      if (txConfirmed) setPaySuccess(true);
+      else setError("Network error. Transaction was sent — save tx hash: " + hash);
     } finally {
       setIsMarkingPaid(false);
     }
   };
 
-  const handlePay = () => {
-    if (!paymentTarget) {
-      setError("Payment target not available. Please refresh the page.");
-      return;
-    }
+  // ── Arc native payment ────────────────────────────────────────
+  const handleArcPay = () => {
+    if (!paymentTarget) { setError("Payment target not available. Please refresh."); return; }
     setError("");
     sendTransaction(
       { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
       {
         onSuccess: (hash) => {
-          console.log("[PayPage] tx submitted:", hash);
           setTxHash(hash);
           if (address) markPaid(hash, address);
         },
         onError: (err: Error) => {
           if (err.message?.includes("rejected") || err.message?.includes("denied")) {
-            setError("Transaction was rejected in MetaMask.");
+            setError("Transaction rejected in MetaMask.");
           } else if (err.message?.includes("insufficient")) {
             setError("Insufficient USDC balance.");
           } else {
@@ -164,19 +128,73 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   };
 
+  // ── Unified Balance multi-chain payment ───────────────────────
+  const handleUnifiedPay = async () => {
+    setUnifiedError("");
+    setUnifiedStep("depositing");
+
+    try {
+      const kit = getAppKit();
+      const adapter = await createBrowserAdapter();
+      const recipientAddr = link.recipientAddress || link.stealthAddress;
+
+      if (!recipientAddr) throw new Error("Recipient address not available.");
+
+      // Step 1: Deposit from selected source chain into Unified Balance
+      console.log(`[Unified] Depositing ${link.amount} USDC from ${selectedChain}`);
+      const depositResult = await kit.unifiedBalance.deposit({
+        from: { adapter, chain: selectedChain as any },
+        amount: link.amount,
+        token: "USDC",
+      });
+
+      console.log("[Unified] Deposit done:", depositResult);
+      setUnifiedTxHash(depositResult?.txHash ?? "");
+      setUnifiedStep("spending");
+
+      // Step 2: Spend from Unified Balance to recipient on Arc
+      console.log(`[Unified] Spending to ${recipientAddr} on Arc Testnet`);
+      const spendResult = await kit.unifiedBalance.spend({
+        from: { adapter },
+        amountIn: link.amount,
+        to: {
+          adapter,
+          chain: "Arc_Testnet",
+          recipientAddress: recipientAddr,
+        },
+      });
+
+      console.log("[Unified] Spend done:", spendResult);
+      setUnifiedStep("recording");
+
+      // Step 3: Record in DB
+      const finalHash = spendResult?.txHash ?? depositResult?.txHash ?? "0x";
+      if (address) await markPaid(finalHash, address);
+
+      setUnifiedStep("done");
+    } catch (err: any) {
+      console.error("[Unified] Error:", err);
+      setUnifiedError(err.message ?? "Cross-chain payment failed. Please try again.");
+      setUnifiedStep("failed");
+    }
+  };
+
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
   const hasEnough = bal >= parseFloat(link.amount);
+  const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
 
-  // ── Already used ──────────────────────────────────────────────────────────
+  // ── Already used ──────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
+        <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
+        <p className="pay-tagline">PAYMENT REQUEST</p>
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }}/>
-          <div style={{ textAlign: "center", padding: "8px 0" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
-            <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Already Used</h2>
-            <p className="pay-success-desc">Each link can only be paid once. Ask the creator to generate a new link.</p>
+          <div className="pay-card-bar"/>
+          <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
+            <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
+            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8, letterSpacing: "-.03em" }}>Link Already Used</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>Each link can only be paid once. Ask the creator for a new link.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -184,16 +202,18 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Cancelled ──────────────────────────────────────────────────────────────
+  // ── Cancelled ─────────────────────────────────────────────────
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
+        <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
+        <p className="pay-tagline">PAYMENT REQUEST</p>
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#ef4444,#f59e0b)" }}/>
-          <div style={{ textAlign: "center", padding: "8px 0" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>❌</div>
-            <h2 className="pay-success-title" style={{ color: "#f87171" }}>Link Cancelled</h2>
-            <p className="pay-success-desc">This payment link has been cancelled by the creator.</p>
+          <div className="pay-card-bar"/>
+          <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
+            <div style={{ fontSize: 40, marginBottom: 14 }}>❌</div>
+            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8, letterSpacing: "-.03em" }}>Link Cancelled</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This payment link has been cancelled by the creator.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -201,195 +221,245 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Success ────────────────────────────────────────────────────────────────
+  // ── Success ───────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
+        <div className="pay-logo"><div className="pay-logo-icon"><svg viewBox="0 0 20 20" fill="none" width="13" height="13"><rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/><rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/></svg></div><span className="pay-logo-name">Conduit</span></div>
+        <p className="pay-tagline">PAYMENT REQUEST</p>
         <div className="pay-card">
-          <div className="pay-card-top-line" style={{ background: "linear-gradient(90deg,#10b981,#3b82f6)" }}/>
-          <div className="pay-success-icon">
-            <svg viewBox="0 0 24 24" fill="none" width="26" height="26">
-              <path d="M5 12l4.5 4.5L19 7" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <h2 className="pay-success-title">Payment Complete!</h2>
-          <p className="pay-success-desc">
-            <strong style={{ color: "#f0f2ff" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
-          </p>
-
-          {/* Stealth forward status */}
-          {isStealthLink && (
-            <div style={{
-              margin: "10px 0",
-              padding: "8px 12px",
-              borderRadius: 8,
-              fontSize: 11,
-              textAlign: "center",
-              background: forwardStatus === "done"
-                ? "rgba(16,185,129,0.08)"
-                : forwardStatus === "failed"
-                ? "rgba(239,68,68,0.08)"
-                : "rgba(139,92,246,0.08)",
-              color: forwardStatus === "done"
-                ? "#34d399"
-                : forwardStatus === "failed"
-                ? "#f87171"
-                : "#a78bfa",
-              border: `1px solid ${forwardStatus === "done"
-                ? "rgba(16,185,129,0.2)"
-                : forwardStatus === "failed"
-                ? "rgba(239,68,68,0.2)"
-                : "rgba(139,92,246,0.2)"}`,
-            }}>
-              {forwardStatus === "idle" && "🔒 Processing privacy layer..."}
-              {forwardStatus === "pending" && "🔒 Forwarding through privacy layer..."}
-              {forwardStatus === "done" && "✅ Delivered to recipient"}
-              {forwardStatus === "failed" && "⚠️ Forward pending — funds are safe"}
+          <div className="pay-card-bar"/>
+          <div className="pay-actions" style={{ textAlign: "center" }}>
+            <div className="pay-success-icon">
+              <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
+                <path d="M5 12l4.5 4.5L19 7" stroke="var(--c)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
             </div>
-          )}
-
-          <p style={{ fontSize: 11, color: "#4a4f6a", textAlign: "center", marginBottom: 12 }}>
-            This link is now closed — one-time use only.
-          </p>
-          {(txHash || link.txHash) && (
-            <a
-              href={`https://testnet.arcscan.app/tx/${txHash ?? link.txHash}`}
-              target="_blank" rel="noopener noreferrer"
-              className="pay-success-txlink"
-            >
-              View on ArcScan ↗
-            </a>
-          )}
+            <p className="pay-success-title">Payment Complete!</p>
+            <p className="pay-success-desc">
+              <strong style={{ color: "var(--ink-1)" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
+              {payMode === "unified" && chainInfo && (
+                <span style={{ color: "var(--ink-3)" }}> via {chainInfo.name}</span>
+              )}
+            </p>
+            <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 14 }}>This link is now closed — one-time use only.</p>
+            {(txHash || unifiedTxHash || link.txHash) && (
+              <a href={`https://testnet.arcscan.app/tx/${txHash ?? unifiedTxHash ?? link.txHash}`}
+                target="_blank" rel="noopener noreferrer" className="pay-tx-link">
+                View on ArcScan ↗
+              </a>
+            )}
+          </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
       </div>
     );
   }
 
+  // ── Main pay UI ───────────────────────────────────────────────
   return (
     <div className="pay-page">
-      <div className="pay-header">
-        <div className="pay-header-logo">
-          <div className="pay-header-logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" width="13" height="13">
-              <path d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
-                stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <span className="pay-header-logo-text">Arc<span>Wave</span></span>
+      <div className="pay-logo">
+        <div className="pay-logo-icon">
+          <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
+            <rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/>
+            <rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/>
+          </svg>
         </div>
-        <p className="pay-header-label">PAYMENT REQUEST</p>
+        <span className="pay-logo-name">Conduit</span>
       </div>
+      <p className="pay-tagline">PAYMENT REQUEST</p>
 
       <div className="pay-card">
-        <div className="pay-card-top-line"/>
+        <div className="pay-card-bar"/>
 
-        <div className="pay-amount-section">
+        {/* Amount */}
+        <div className="pay-amount-zone">
           <div>
-            <span className="pay-amount-value">{formatUSDC(link.amount)}</span>
-            <span className="pay-amount-unit">USDC</span>
+            <span className="pay-amount">{formatUSDC(link.amount)}</span>
+            <span className="pay-currency">USDC</span>
           </div>
-          <p className="pay-amount-title">{link.title}</p>
-          {link.description && <p className="pay-amount-desc">{link.description}</p>}
+          <p className="pay-link-title">{link.title}</p>
+          {link.description && <p className="pay-link-desc">{link.description}</p>}
         </div>
 
+        {/* Details */}
         <div className="pay-details">
-          <div className="pay-detail-row">
-            <span className="pay-detail-label">Pay to</span>
-            <span className="pay-detail-value mono" style={{ letterSpacing: "0.04em" }}>
-              {displayAddress}
+          <div className="pay-detail">
+            <span className="pay-detail-k">Pay to</span>
+            <span className="pay-detail-v">{displayAddress}</span>
+          </div>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Network</span>
+            <span className="pay-detail-v">
+              <span className="pay-net-dot pulse-dot"/>Arc Testnet
             </span>
           </div>
-          <div className="pay-detail-row">
-            <span className="pay-detail-label">Network</span>
-            <span className="pay-detail-value">
-              <span className="pay-network-dot"/> Arc Testnet
-            </span>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Token</span>
+            <span className="pay-detail-v">USDC (native)</span>
           </div>
-          <div className="pay-detail-row">
-            <span className="pay-detail-label">Token</span>
-            <span className="pay-detail-value mono">USDC (native)</span>
-          </div>
-          <div className="pay-detail-row">
-            <span className="pay-detail-label">Privacy</span>
-            <span className="pay-detail-value" style={{ fontSize: 11 }}>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Privacy</span>
+            <span className="pay-detail-v" style={{ fontSize: 11 }}>
               {isStealthLink
-                ? <span style={{ color: "#a78bfa" }}>🔒 Stealth mode</span>
-                : <span style={{ color: "#4a4f6a" }}>Standard</span>}
+                ? <span style={{ color: "var(--c)" }}>🔒 Stealth mode</span>
+                : <span style={{ color: "var(--ink-3)" }}>Standard</span>}
             </span>
           </div>
         </div>
 
-        {isStealthLink && (
-          <div style={{
-            background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.2)",
-            borderRadius: 8, padding: "8px 12px", marginBottom: 14,
-            display: "flex", alignItems: "flex-start", gap: 8,
-          }}>
-            <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
-            <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
-              Privacy protected. Funds are routed through a temporary address before delivery.
-            </p>
-          </div>
-        )}
-
-        {!mounted ? null : !isConnected ? (
-          <button className="pay-btn-primary" onClick={() => connect({ connector: injected() })}>
-            Connect Wallet to Pay
-          </button>
-        ) : !isOnArc ? (
-          <>
-            <div className="pay-warning-box">⚠️ Switch to Arc Testnet to continue.</div>
-            <button className="pay-btn-warning" onClick={() => switchChain({ chainId: arcTestnet.id })}>
-              Switch to Arc Testnet
-            </button>
-          </>
-        ) : isPending || isWaiting || isMarkingPaid ? (
-          <div className="pay-confirming">
-            <div className="pay-confirming-spinner"/>
-            <p className="pay-confirming-text">
-              {isPending ? "Confirm in MetaMask..."
-                : isWaiting ? "Waiting for block confirmation..."
-                : "Recording payment..."}
-            </p>
-            {txHash && (
-              <a href={`https://testnet.arcscan.app/tx/${txHash}`}
-                target="_blank" rel="noopener noreferrer"
-                className="pay-success-txlink" style={{ marginTop: 8 }}>
-                Track on ArcScan ↗
-              </a>
-            )}
-          </div>
-        ) : (
-          <>
+        {/* Mode tabs — only show when connected */}
+        {mounted && isConnected && (
+          <div className="pay-tabs">
             <button
-              className="pay-btn-primary"
-              onClick={handlePay}
-              disabled={!hasEnough || !paymentTarget}
+              className={`pay-tab${payMode === "arc" ? " on" : ""}`}
+              onClick={() => setPayMode("arc")}
             >
-              Pay {formatUSDC(link.amount)} USDC
+              ⚡ Arc Wallet
             </button>
-            {balance && (
-              <p className={`pay-balance-note${!hasEnough ? " insufficient" : ""}`}>
-                Your balance:{" "}
-                <span className="pay-balance-amount">{bal.toFixed(4)} USDC</span>
-                {!hasEnough && (
-                  <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-balance-faucet">get more from faucet</a></>
-                )}
-              </p>
-            )}
-          </>
+            <button
+              className={`pay-tab${payMode === "unified" ? " on" : ""}`}
+              onClick={() => setPayMode("unified")}
+            >
+              🌐 Any Chain
+            </button>
+          </div>
         )}
 
-        {error && <div className="pay-error-box">{error}</div>}
+        {/* ── Arc mode ─────────────────────────────────────────── */}
+        {payMode === "arc" && (
+          <div className="pay-actions">
+            {/* Info */}
+            <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
+              <p style={{ fontSize: 11, color: "var(--ink-3)" }}>⚡ Direct payment on Arc Network — instant, lowest fees</p>
+            </div>
 
+            {!mounted ? null : !isConnected ? (
+              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>
+                Connect Wallet to Pay
+              </button>
+            ) : !isOnArc ? (
+              <>
+                <div className="pay-warn-box">⚠️ Switch to Arc Testnet to continue.</div>
+                <button className="pay-switch-btn" onClick={() => switchChain({ chainId: arcTestnet.id })}>
+                  Switch to Arc Testnet
+                </button>
+              </>
+            ) : isPending || isWaiting || isMarkingPaid ? (
+              <div className="pay-spin-zone">
+                <div className="pay-spinner"/>
+                <p className="pay-spin-text">
+                  {isPending ? "Confirm in MetaMask..."
+                    : isWaiting ? "Waiting for confirmation..."
+                    : "Recording payment..."}
+                </p>
+                {txHash && (
+                  <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ marginTop: 8 }}>
+                    Track on ArcScan ↗
+                  </a>
+                )}
+              </div>
+            ) : (
+              <>
+                <button
+                  className="pay-connect-btn"
+                  onClick={handleArcPay}
+                  disabled={!hasEnough || !paymentTarget}
+                  style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}
+                >
+                  Pay {formatUSDC(link.amount)} USDC
+                </button>
+                {balance && (
+                  <p className={`pay-bal${!hasEnough ? " low" : ""}`}>
+                    Balance: <span style={{ color: "var(--ink-2)" }}>{bal.toFixed(4)} USDC</span>
+                    {!hasEnough && (
+                      <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-bal-link">get USDC</a></>
+                    )}
+                  </p>
+                )}
+              </>
+            )}
+
+            {error && <div className="pay-err-box">{error}</div>}
+          </div>
+        )}
+
+        {/* ── Unified Balance mode ──────────────────────────────── */}
+        {payMode === "unified" && (
+          <div className="pay-actions">
+            {/* Info */}
+            <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>
+              <p style={{ fontSize: 12, color: "#a78bfa", fontWeight: 700, marginBottom: 4 }}>🌐 Pay from any chain</p>
+              <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>Use USDC from Base, Ethereum, Arbitrum or other chains. Powered by Circle Unified Balance.</p>
+            </div>
+
+            {/* Chain selector */}
+            <p style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace", letterSpacing: ".1em", marginBottom: 9 }}>SELECT SOURCE CHAIN</p>
+            <div className="chain-grid" style={{ marginBottom: 16 }}>
+              {SOURCE_CHAINS.map((chain) => (
+                <button
+                  key={chain.id}
+                  onClick={() => setSelectedChain(chain.id)}
+                  className={`chain-btn${selectedChain === chain.id ? " on" : ""}`}
+                >
+                  <span style={{ fontSize: 18 }}>{chain.icon}</span>
+                  <span className="chain-name">{chain.name}</span>
+                </button>
+              ))}
+            </div>
+
+            {!mounted ? null : !isConnected ? (
+              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>
+                Connect Wallet to Pay
+              </button>
+            ) : unifiedStep === "depositing" ? (
+              <div className="pay-spin-zone">
+                <div className="pay-spinner"/>
+                <p className="pay-spin-text">Step 1/2 — Depositing from {chainInfo?.name}...</p>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm in MetaMask on {chainInfo?.name}</p>
+              </div>
+            ) : unifiedStep === "spending" ? (
+              <div className="pay-spin-zone">
+                <div className="pay-spinner"/>
+                <p className="pay-spin-text">Step 2/2 — Routing to Arc Network...</p>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm spend in MetaMask</p>
+              </div>
+            ) : unifiedStep === "recording" ? (
+              <div className="pay-spin-zone">
+                <div className="pay-spinner"/>
+                <p className="pay-spin-text">Recording payment...</p>
+              </div>
+            ) : (
+              <>
+                <button
+                  className="pay-connect-btn"
+                  onClick={handleUnifiedPay}
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}
+                >
+                  Pay {formatUSDC(link.amount)} USDC from {chainInfo?.name}
+                </button>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
+                  2 MetaMask confirmations required
+                </p>
+              </>
+            )}
+
+            {unifiedStep === "failed" && unifiedError && (
+              <div className="pay-err-box" style={{ marginTop: 12 }}>{unifiedError}</div>
+            )}
+          </div>
+        )}
+
+        {/* Wallet footer */}
         {mounted && isConnected && address && (
-          <div className="pay-wallet-footer">
-            <span className="pay-wallet-address">{address.slice(0, 6)}...{address.slice(-4)}</span>
-            <button className="pay-disconnect-btn" onClick={() => disconnect()}>Disconnect</button>
+          <div className="pay-wallet-row">
+            <span className="pay-wallet-addr">{address.slice(0,6)}...{address.slice(-4)}</span>
+            <button className="pay-disc-btn" onClick={() => disconnect()}>Disconnect</button>
           </div>
         )}
       </div>
+
       <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );
