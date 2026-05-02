@@ -129,11 +129,37 @@ export function PayPage({ link }: { link: PaymentLink }) {
   };
 
   // ── Unified Balance multi-chain payment ───────────────────────
+  const CHAIN_IDS: Record<string, number> = {
+    "Base_Sepolia":     84532,
+    "Ethereum_Sepolia": 11155111,
+    "Arbitrum_Sepolia": 421614,
+    "Polygon_Amoy":     80002,
+    "Avalanche_Fuji":   43113,
+    "OP_Sepolia":       11155420,
+  };
+
   const handleUnifiedPay = async () => {
     setUnifiedError("");
     setUnifiedStep("depositing");
 
     try {
+      // Switch MetaMask to the selected source chain before depositing
+      const targetChainId = CHAIN_IDS[selectedChain];
+      if (targetChainId && window.ethereum) {
+        try {
+          await (window.ethereum as any).request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: `0x${targetChainId.toString(16)}` }],
+          });
+        } catch (switchErr: any) {
+          // Chain not added yet — add it
+          if (switchErr.code === 4902) {
+            throw new Error(`Please add ${chainInfo?.name} network to MetaMask first.`);
+          }
+          throw switchErr;
+        }
+      }
+
       const kit = getAppKit();
       const adapter = await createBrowserAdapter();
       const recipientAddr = link.recipientAddress || link.stealthAddress;
