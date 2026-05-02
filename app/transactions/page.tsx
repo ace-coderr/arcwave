@@ -43,7 +43,6 @@ export default function TransactionsPage() {
       <NavBar />
 
       <div className="page-wrap">
-
         <div className="page-header">
           <h1 className="page-title">Transactions</h1>
           <p className="page-subtitle">All completed USDC payments received</p>
@@ -54,7 +53,10 @@ export default function TransactionsPage() {
           <div className="tx-stats">
             <div className="tx-stat">
               <div className="tx-stat-bar" style={{ background: "var(--c)" }} />
-              <div className="tx-stat-val">{parseFloat(totalReceived).toLocaleString()} <span style={{ fontSize: 14, color: "var(--c)", fontWeight: 700 }}>USDC</span></div>
+              <div className="tx-stat-val">
+                {parseFloat(totalReceived).toLocaleString()}
+                <span style={{ fontSize: 14, color: "var(--c)", fontWeight: 700, marginLeft: 6 }}>USDC</span>
+              </div>
               <div className="tx-stat-label">Total Received</div>
             </div>
             <div className="tx-stat">
@@ -70,8 +72,10 @@ export default function TransactionsPage() {
           </div>
         )}
 
-        {/* Table */}
-        <div className="card">
+        {/* Table card */}
+        <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+
+          {/* Table header */}
           <div className="table-head">
             <div className="table-head-left">
               <span className="table-title">Transaction History</span>
@@ -88,69 +92,78 @@ export default function TransactionsPage() {
             </div>
           )}
 
-          {/* Loading */}
-          {(!mounted || isLoading) && (
-            <div className="loading-wrap" style={{ height: 160 }}>
-              <div className="page-spinner" />
-            </div>
-          )}
+          {/* Scrollable rows */}
+          <div style={{ overflowY: "auto", maxHeight: 520 }}>
 
-          {/* Not connected */}
-          {mounted && !isConnected && !isLoading && (
-            <div className="empty">
-              <div className="empty-icon">
-                <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                  <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
-                  <path d="M9 10h.01M15 10h.01M9.5 15s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
+            {/* Loading */}
+            {(!mounted || isLoading) && (
+              <div className="loading-wrap" style={{ height: 160 }}>
+                <div className="page-spinner" />
               </div>
-              <p className="empty-title">Connect your wallet</p>
-              <p className="empty-sub">Connect to view your transaction history</p>
-            </div>
-          )}
+            )}
 
-          {/* Empty */}
-          {mounted && isConnected && !isLoading && completed.length === 0 && (
-            <div className="empty">
-              <div className="empty-icon">
-                <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                  <path d="M12 2v10m0 0l-3-3m3 3l3-3M3 17l1.5 3h15L21 17" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
+            {/* Not connected */}
+            {mounted && !isConnected && !isLoading && (
+              <div className="empty">
+                <div className="empty-icon">
+                  <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+                    <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
+                    <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                <p className="empty-title">Connect your wallet</p>
+                <p className="empty-sub">Connect to view your transaction history</p>
               </div>
-              <p className="empty-title">No transactions yet</p>
-              <p className="empty-sub">Completed payments will appear here</p>
-            </div>
-          )}
+            )}
 
-          {/* Rows */}
-          {mounted && !isLoading && completed.map((tx) => (
-            <div key={tx.id} className="tx-row fade-in">
-              <div>
-                <p className="tx-name">{tx.title}</p>
-                {tx.paidAt && <p className="tx-date-sm">Paid {formatDate(tx.paidAt)}</p>}
+            {/* Empty */}
+            {mounted && isConnected && !isLoading && completed.length === 0 && (
+              <div className="empty">
+                <div className="empty-icon">
+                  <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+                    <path d="M12 2v10m0 0l-3-3m3 3l3-3M3 17l1.5 3h15L21 17" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <p className="empty-title">No transactions yet</p>
+                <p className="empty-sub">Completed payments will appear here</p>
               </div>
-              <span className="tx-amount">
-                +{formatUSDC(tx.amount)}<span className="tx-amount-unit"> USDC</span>
-              </span>
-              <span className="tx-from">
-                {tx.paidBy ? shortenAddress(tx.paidBy) : "—"}
-              </span>
-              <span className="tx-date">{formatDate(tx.createdAt)}</span>
-              {tx.txHash ? (
-                <a
-                  href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tx-link"
-                >
-                  {shortenAddress(tx.txHash)} ↗
-                </a>
-              ) : (
-                <span className="tx-date">—</span>
-              )}
-            </div>
-          ))}
+            )}
+
+            {/* Rows */}
+            {mounted && !isLoading && completed.map((tx) => (
+              <div key={tx.id} className="tx-row fade-in">
+                <div>
+                  <p className="tx-name">{tx.title}</p>
+                  {tx.paidAt && <p className="tx-date-sm">Paid {formatDate(tx.paidAt)}</p>}
+                </div>
+                <span className="tx-amount">
+                  +{formatUSDC(tx.amount)}
+                  <span className="tx-amount-unit"> USDC</span>
+                </span>
+                <span className="tx-from">
+                  {tx.paidBy ? shortenAddress(tx.paidBy) : "—"}
+                </span>
+                <span className="tx-date">{formatDate(tx.createdAt)}</span>
+                {tx.txHash ? (
+                  <a
+                    href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="tx-link"
+                  >
+                    {shortenAddress(tx.txHash)} ↗
+                  </a>
+                ) : (
+                  <span className="tx-date">—</span>
+                )}
+              </div>
+            ))}
+
+          </div>
+          {/* end scrollable */}
+
         </div>
+        {/* end card */}
 
       </div>
 
