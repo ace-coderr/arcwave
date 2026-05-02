@@ -156,7 +156,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
       console.log(`[Unified] Spending to ${recipientAddr} on Arc Testnet`);
       const spendResult = await kit.unifiedBalance.spend({
         from: { adapter },
-        amountIn: link.amount,
+        amount: link.amount,
         to: {
           adapter,
           chain: "Arc_Testnet",
