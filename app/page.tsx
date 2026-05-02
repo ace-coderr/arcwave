@@ -225,10 +225,10 @@ export default function HomePage() {
       <footer className="app-footer">
         <span>Conduit v0.1.0</span>
         <div className="footer-links">
-          <a href="https://x.com/conduit_app" target="_blank" rel="noopener noreferrer" className="footer-link">
+          <a href="https://x.com/conduit_pay" target="_blank" rel="noopener noreferrer" className="footer-link">
             <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.845L1.255 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
           </a>
-          <a href="https://t.me/conduit_community" target="_blank" rel="noopener noreferrer" className="footer-link">
+          <a href="https://t.me/conduit_app" target="_blank" rel="noopener noreferrer" className="footer-link">
             <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.94-.918c-.64-.203-.654-.64.136-.954l11.49-4.43c.532-.194.998.131.838.856z"/></svg>
           </a>
         </div>
