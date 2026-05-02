@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
-import { Sidebar } from "@/components/Sidebar";
-import { TopBar } from "@/components/TopBar";
+import { NavBar } from "@/components/NavBar";
 import { formatUSDC, formatDate, shortenAddress } from "@/lib/utils";
 
 interface PaymentLink {
@@ -46,10 +45,9 @@ export default function TransactionsPage() {
   ];
 
   return (
-    <div className="layout">
-      <Sidebar />
-      <div className="layout-main">
-        <TopBar />
+    <div className="app">
+      <NavBar />
+      <div className="page-wrap">
         <main className="page-content">
 
           <div className="page-header">

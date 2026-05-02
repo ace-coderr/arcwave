@@ -1,86 +1,167 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { useEffect, useState } from "react";
 
-export function Navbar() {
+const LINKS = [
+  {
+    label: "Dashboard", href: "/",
+    icon: <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>,
+  },
+  {
+    label: "Links", href: "/links",
+    icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M9 6a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" strokeLinecap="round"/><path d="M7 10a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" strokeLinecap="round"/></svg>,
+  },
+  {
+    label: "Transactions", href: "/transactions",
+    icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M2 5h12M2 5l3-3M2 5l3 3M14 11H2m12 0l-3-3m3 3l-3 3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  },
+  {
+    label: "Analytics", href: "/analytics", soon: true,
+    icon: <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><path d="M2 12V8h2.5v4H2zm4 0V4h2.5v8H6zm4 0V1h2.5v11H10z" opacity=".85"/></svg>,
+  },
+];
+
+export function NavBar() {
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [time, setTime] = useState("");
+  const [isDark, setIsDark] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
 
   useEffect(() => {
     setMounted(true);
+    setIsDark(localStorage.getItem("conduit-theme") !== "light");
+    const tick = () => setTime(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
 
-  const short = address
-    ? `${address.slice(0, 6)}...${address.slice(-4)}`
-    : "";
+  useEffect(() => { setDrawerOpen(false); }, [pathname]);
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    if (next) {
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.setItem("conduit-theme", "dark");
+    } else {
+      document.documentElement.setAttribute("data-theme", "light");
+      localStorage.setItem("conduit-theme", "light");
+    }
+  };
+
+  const short = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
   return (
-    <nav className="border-b border-arc-border bg-arc-card/50 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-arc-blue flex items-center justify-center">
-            <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4">
-              <path
-                d="M3 17 C6 10, 10 6, 12 12 C14 18, 18 14, 21 7"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
+    <>
+      <nav className="nav">
+        {/* Logo */}
+        <Link href="/" className="nav-logo">
+          <div className="nav-logo-icon">
+            <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
+              <rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/>
+              <rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/>
             </svg>
           </div>
-          <span className="font-bold text-arc-text text-base">
-            Arc<span className="text-arc-blue">Wave</span>
-          </span>
-          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-arc-border text-xs font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-arc-green animate-pulse" />
-            <span className="text-arc-muted">ARC TESTNET</span>
-          </div>
+          <span className="nav-logo-text">Conduit</span>
+        </Link>
+
+        {/* Links */}
+        <div className="nav-links">
+          {LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.soon ? "#" : l.href}
+              className={`nav-link${pathname === l.href ? " active" : ""}${l.soon ? " disabled" : ""}`}
+              style={l.soon ? { pointerEvents: "none", opacity: .4 } : {}}
+            >
+              <span className="nav-link-icon">{l.icon}</span>
+              {l.label}
+              {l.soon && <span className="nav-soon">SOON</span>}
+            </Link>
+          ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          <a
-            href="https://faucet.circle.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:block text-xs text-arc-muted hover:text-arc-text transition-colors px-3 py-1.5 rounded-lg hover:bg-arc-border/30"
-          >
-            Faucet →
-          </a>
+        {/* Right side */}
+        <div className="nav-right">
+          <div className="nav-network">
+            <span className="nav-network-dot pulse-dot"/>
+            <span className="nav-network-label">Arc Testnet</span>
+          </div>
 
-          <a
-            href="https://testnet.arcscan.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:block text-xs text-arc-muted hover:text-arc-text transition-colors px-3 py-1.5 rounded-lg hover:bg-arc-border/30"
-          >
-            Explorer →
-          </a>
+          {mounted && <span className="nav-time">{time}</span>}
 
           {mounted && (
-            isConnected ? (
-              <button
-                onClick={() => disconnect()}
-                className="px-4 py-2 bg-arc-card border border-arc-border text-arc-text text-sm rounded-lg hover:border-arc-blue/40 transition-colors font-mono"
-              >
-                {short}
-              </button>
-            ) : (
-              <button
-                onClick={() => connect({ connector: injected() })}
-                className="px-4 py-2 bg-arc-blue hover:bg-arc-blue-light text-white text-sm font-semibold rounded-lg transition-colors"
-              >
-                Connect Wallet
-              </button>
-            )
+            <>
+              {isConnected ? (
+                <div
+                  className="nav-wallet"
+                  onClick={() => disconnect()}
+                  title="Click to disconnect"
+                >
+                  <span className="nav-wallet-dot"/>
+                  {short}
+                </div>
+              ) : (
+                <button
+                  className="nav-connect-btn"
+                  onClick={() => connect({ connector: injected() })}
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </>
           )}
-        </div>
 
+          <button
+            className="nav-theme-btn"
+            onClick={toggleTheme}
+            title={isDark ? "Switch to light" : "Switch to dark"}
+          >
+            {mounted ? (isDark ? "☀️" : "🌙") : "☀️"}
+          </button>
+
+          {/* Mobile hamburger */}
+          <button
+            className="nav-hamburger"
+            onClick={() => setDrawerOpen(!drawerOpen)}
+          >
+            {drawerOpen
+              ? <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              : <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            }
+          </button>
+        </div>
+      </nav>
+
+      {/* Mobile drawer */}
+      <div className={`nav-drawer${drawerOpen ? " open" : ""}`}>
+        {LINKS.map((l) => (
+          <Link
+            key={l.href}
+            href={l.soon ? "#" : l.href}
+            className={`nav-link${pathname === l.href ? " active" : ""}`}
+            style={l.soon ? { pointerEvents: "none", opacity: .4 } : {}}
+          >
+            <span className="nav-link-icon">{l.icon}</span>
+            {l.label}
+            {l.soon && <span className="nav-soon">SOON</span>}
+          </Link>
+        ))}
+        <div style={{ height: 1, background: "var(--stroke)", margin: "8px 0" }}/>
+        <div style={{ display: "flex", gap: 10, padding: "4px 0" }}>
+          <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="nav-link" style={{ flex: 1, justifyContent: "center" }}>Get USDC ↗</a>
+          <a href="https://testnet.arcscan.app" target="_blank" rel="noopener noreferrer" className="nav-link" style={{ flex: 1, justifyContent: "center" }}>Explorer ↗</a>
+        </div>
       </div>
-    </nav>
+    </>
   );
 }
