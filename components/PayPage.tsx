@@ -40,7 +40,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const [paySuccess, setPaySuccess] = useState(link.status === "COMPLETED");
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
 
-  // Unified Balance states
   const [unifiedStep, setUnifiedStep] = useState<UnifiedStep>("idle");
   const [unifiedTxHash, setUnifiedTxHash] = useState("");
   const [unifiedError, setUnifiedError] = useState("");
@@ -87,8 +86,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
       setPaySuccess(true);
-
-      // Trigger stealth forward if needed
       if (data.requiresForward) {
         fetch("/api/forward", {
           method: "POST",
@@ -102,6 +99,18 @@ export function PayPage({ link }: { link: PaymentLink }) {
     } finally {
       setIsMarkingPaid(false);
     }
+  };
+
+  // ── Extract tx hash from any SDK result object ────────────────
+  const extractHash = (result: any): string => {
+    if (!result) return "";
+    // Try all known hash field names
+    return result.txHash
+      ?? result.transactionHash
+      ?? result.hash
+      ?? result.receipt?.transactionHash
+      ?? result.receipt?.txHash
+      ?? "";
   };
 
   // ── Arc native payment ────────────────────────────────────────
@@ -143,7 +152,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     setUnifiedStep("depositing");
 
     try {
-      // Switch MetaMask to the selected source chain before depositing
+      // Switch MetaMask to source chain
       const targetChainId = CHAIN_IDS[selectedChain];
       if (targetChainId && window.ethereum) {
         try {
@@ -152,7 +161,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
             params: [{ chainId: `0x${targetChainId.toString(16)}` }],
           });
         } catch (switchErr: any) {
-          // Chain not added yet — add it
           if (switchErr.code === 4902) {
             throw new Error(`Please add ${chainInfo?.name} network to MetaMask first.`);
           }
@@ -163,23 +171,24 @@ export function PayPage({ link }: { link: PaymentLink }) {
       const kit = getAppKit();
       const adapter = await createBrowserAdapter();
       const recipientAddr = link.recipientAddress || link.stealthAddress;
-
       if (!recipientAddr) throw new Error("Recipient address not available.");
 
-      // Step 1: Deposit from selected source chain into Unified Balance
+      // Step 1: Deposit
       console.log(`[Unified] Depositing ${link.amount} USDC from ${selectedChain}`);
       const depositResult = await kit.unifiedBalance.deposit({
         from: { adapter, chain: selectedChain as any },
         amount: link.amount,
         token: "USDC",
       });
+      console.log("[Unified] depositResult keys:", Object.keys(depositResult ?? {}));
+      console.log("[Unified] depositResult:", JSON.stringify(depositResult));
 
-      console.log("[Unified] Deposit done:", depositResult);
-      setUnifiedTxHash(depositResult?.txHash ?? "");
+      const depositHash = extractHash(depositResult);
+      setUnifiedTxHash(depositHash);
       setUnifiedStep("spending");
 
-      // Step 2: Spend from Unified Balance to recipient on Arc
-      console.log(`[Unified] Spending to ${recipientAddr} on Arc Testnet`);
+      // Step 2: Spend
+      console.log(`[Unified] Spending ${link.amount} USDC to ${recipientAddr} on Arc Testnet`);
       const spendResult = await kit.unifiedBalance.spend({
         from: { adapter },
         amount: link.amount,
@@ -189,17 +198,20 @@ export function PayPage({ link }: { link: PaymentLink }) {
           recipientAddress: recipientAddr,
         },
       });
+      console.log("[Unified] spendResult keys:", Object.keys(spendResult ?? {}));
+      console.log("[Unified] spendResult:", JSON.stringify(spendResult));
 
-      console.log("[Unified] Spend done:", spendResult);
       setUnifiedStep("recording");
 
-      // Step 3: Record in DB
-      const finalHash = spendResult?.txHash ?? depositResult?.txHash ?? "0x";
-      if (address) await markPaid(finalHash, address);
+      // Step 3: Record in DB — use spend hash if available, else deposit hash
+      const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
+      console.log("[Unified] finalHash used:", finalHash);
 
+      if (address) await markPaid(finalHash, address);
       setUnifiedStep("done");
+
     } catch (err: any) {
-      console.error("[Unified] Error:", err);
+      console.error("[Unified] Error:", err.message);
       setUnifiedError(err.message ?? "Cross-chain payment failed. Please try again.");
       setUnifiedStep("failed");
     }
@@ -335,19 +347,13 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         </div>
 
-        {/* Mode tabs — only show when connected */}
+        {/* Mode tabs */}
         {mounted && isConnected && (
           <div className="pay-tabs">
-            <button
-              className={`pay-tab${payMode === "arc" ? " on" : ""}`}
-              onClick={() => setPayMode("arc")}
-            >
+            <button className={`pay-tab${payMode === "arc" ? " on" : ""}`} onClick={() => setPayMode("arc")}>
               ⚡ Arc Wallet
             </button>
-            <button
-              className={`pay-tab${payMode === "unified" ? " on" : ""}`}
-              onClick={() => setPayMode("unified")}
-            >
+            <button className={`pay-tab${payMode === "unified" ? " on" : ""}`} onClick={() => setPayMode("unified")}>
               🌐 Any Chain
             </button>
           </div>
@@ -356,57 +362,35 @@ export function PayPage({ link }: { link: PaymentLink }) {
         {/* ── Arc mode ─────────────────────────────────────────── */}
         {payMode === "arc" && (
           <div className="pay-actions">
-            {/* Info */}
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
               <p style={{ fontSize: 11, color: "var(--ink-3)" }}>⚡ Direct payment on Arc Network — instant, lowest fees</p>
             </div>
-
             {!mounted ? null : !isConnected ? (
-              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>
-                Connect Wallet to Pay
-              </button>
+              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>Connect Wallet to Pay</button>
             ) : !isOnArc ? (
               <>
                 <div className="pay-warn-box">⚠️ Switch to Arc Testnet to continue.</div>
-                <button className="pay-switch-btn" onClick={() => switchChain({ chainId: arcTestnet.id })}>
-                  Switch to Arc Testnet
-                </button>
+                <button className="pay-switch-btn" onClick={() => switchChain({ chainId: arcTestnet.id })}>Switch to Arc Testnet</button>
               </>
             ) : isPending || isWaiting || isMarkingPaid ? (
               <div className="pay-spin-zone">
                 <div className="pay-spinner"/>
-                <p className="pay-spin-text">
-                  {isPending ? "Confirm in MetaMask..."
-                    : isWaiting ? "Waiting for confirmation..."
-                    : "Recording payment..."}
-                </p>
-                {txHash && (
-                  <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ marginTop: 8 }}>
-                    Track on ArcScan ↗
-                  </a>
-                )}
+                <p className="pay-spin-text">{isPending ? "Confirm in MetaMask..." : isWaiting ? "Waiting for confirmation..." : "Recording payment..."}</p>
+                {txHash && <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ marginTop: 8 }}>Track on ArcScan ↗</a>}
               </div>
             ) : (
               <>
-                <button
-                  className="pay-connect-btn"
-                  onClick={handleArcPay}
-                  disabled={!hasEnough || !paymentTarget}
-                  style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}
-                >
+                <button className="pay-connect-btn" onClick={handleArcPay} disabled={!hasEnough || !paymentTarget} style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}>
                   Pay {formatUSDC(link.amount)} USDC
                 </button>
                 {balance && (
                   <p className={`pay-bal${!hasEnough ? " low" : ""}`}>
                     Balance: <span style={{ color: "var(--ink-2)" }}>{bal.toFixed(4)} USDC</span>
-                    {!hasEnough && (
-                      <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-bal-link">get USDC</a></>
-                    )}
+                    {!hasEnough && <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-bal-link">get USDC</a></>}
                   </p>
                 )}
               </>
             )}
-
             {error && <div className="pay-err-box">{error}</div>}
           </div>
         )}
@@ -414,21 +398,15 @@ export function PayPage({ link }: { link: PaymentLink }) {
         {/* ── Unified Balance mode ──────────────────────────────── */}
         {payMode === "unified" && (
           <div className="pay-actions">
-            {/* Info */}
             <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>
               <p style={{ fontSize: 12, color: "#a78bfa", fontWeight: 700, marginBottom: 4 }}>🌐 Pay from any chain</p>
               <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>Use USDC from Base, Ethereum, Arbitrum or other chains. Powered by Circle Unified Balance.</p>
             </div>
 
-            {/* Chain selector */}
             <p style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace", letterSpacing: ".1em", marginBottom: 9 }}>SELECT SOURCE CHAIN</p>
             <div className="chain-grid" style={{ marginBottom: 16 }}>
               {SOURCE_CHAINS.map((chain) => (
-                <button
-                  key={chain.id}
-                  onClick={() => setSelectedChain(chain.id)}
-                  className={`chain-btn${selectedChain === chain.id ? " on" : ""}`}
-                >
+                <button key={chain.id} onClick={() => setSelectedChain(chain.id)} className={`chain-btn${selectedChain === chain.id ? " on" : ""}`}>
                   <span style={{ fontSize: 18 }}>{chain.icon}</span>
                   <span className="chain-name">{chain.name}</span>
                 </button>
@@ -436,9 +414,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
             </div>
 
             {!mounted ? null : !isConnected ? (
-              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>
-                Connect Wallet to Pay
-              </button>
+              <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>Connect Wallet to Pay</button>
             ) : unifiedStep === "depositing" ? (
               <div className="pay-spin-zone">
                 <div className="pay-spinner"/>
@@ -458,16 +434,10 @@ export function PayPage({ link }: { link: PaymentLink }) {
               </div>
             ) : (
               <>
-                <button
-                  className="pay-connect-btn"
-                  onClick={handleUnifiedPay}
-                  style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}
-                >
+                <button className="pay-connect-btn" onClick={handleUnifiedPay} style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}>
                   Pay {formatUSDC(link.amount)} USDC from {chainInfo?.name}
                 </button>
-                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
-                  2 MetaMask confirmations required
-                </p>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>2 MetaMask confirmations required</p>
               </>
             )}
 
