@@ -38,111 +38,138 @@ export default function TransactionsPage() {
   const totalReceived = completed.reduce((s, l) => s + parseFloat(l.amount), 0).toFixed(2);
   const pending = links.filter((l) => l.status === "ACTIVE").length;
 
-  const txStats = [
-    { label: "Total Received", value: `${parseFloat(totalReceived).toLocaleString()} USDC`, color: "#10b981" },
-    { label: "Transactions", value: completed.length.toString(), color: "#3b82f6" },
-    { label: "Pending Links", value: pending.toString(), color: "#f59e0b" },
-  ];
-
   return (
     <div className="app">
       <NavBar />
-      <div className="page-wrap">
-        <main className="page-content">
 
-          <div className="page-header">
-            <h1 className="page-title">Transactions</h1>
-            <p className="page-subtitle">All completed USDC payments received</p>
+      <div className="page-wrap">
+
+        <div className="page-header">
+          <h1 className="page-title">Transactions</h1>
+          <p className="page-subtitle">All completed USDC payments received</p>
+        </div>
+
+        {/* Stats */}
+        {mounted && isConnected && (
+          <div className="tx-stats">
+            <div className="tx-stat">
+              <div className="tx-stat-bar" style={{ background: "var(--c)" }} />
+              <div className="tx-stat-val">{parseFloat(totalReceived).toLocaleString()} <span style={{ fontSize: 14, color: "var(--c)", fontWeight: 700 }}>USDC</span></div>
+              <div className="tx-stat-label">Total Received</div>
+            </div>
+            <div className="tx-stat">
+              <div className="tx-stat-bar" style={{ background: "var(--info)" }} />
+              <div className="tx-stat-val">{completed.length}</div>
+              <div className="tx-stat-label">Transactions</div>
+            </div>
+            <div className="tx-stat">
+              <div className="tx-stat-bar" style={{ background: "var(--warning)" }} />
+              <div className="tx-stat-val">{pending}</div>
+              <div className="tx-stat-label">Active Links</div>
+            </div>
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="card">
+          <div className="table-head">
+            <div className="table-head-left">
+              <span className="table-title">Transaction History</span>
+              <span className="count-tag">{completed.length} records</span>
+            </div>
           </div>
 
-          {/* Stats */}
-          {mounted && isConnected && (
-            <div className="tx-stats-grid">
-              {txStats.map((c) => (
-                <div key={c.label} className="tx-stat-card">
-                  <div className="tx-stat-top-line" style={{ background: c.color }} />
-                  <div className="tx-stat-value">{c.value}</div>
-                  <div className="tx-stat-label">{c.label}</div>
-                </div>
+          {/* Col headers */}
+          {completed.length > 0 && (
+            <div className="tx-cols">
+              {["DESCRIPTION", "AMOUNT", "FROM", "DATE", "TX HASH"].map((c) => (
+                <span key={c} className="tx-col">{c}</span>
               ))}
             </div>
           )}
 
-          {/* Table */}
-          <div className="tx-table-card">
-            <div className="tx-table-header">
-              <span className="tx-table-title">Transaction History</span>
-              <span className="tx-table-count">{completed.length} records</span>
+          {/* Loading */}
+          {(!mounted || isLoading) && (
+            <div className="loading-wrap" style={{ height: 160 }}>
+              <div className="page-spinner" />
             </div>
+          )}
 
-            {/* Column headers */}
-            {completed.length > 0 && (
-              <div className="tx-col-headers">
-                {["DESCRIPTION", "AMOUNT", "FROM", "DATE", "TX HASH"].map((col) => (
-                  <span key={col} className="tx-col-header">{col}</span>
-                ))}
+          {/* Not connected */}
+          {mounted && !isConnected && !isLoading && (
+            <div className="empty">
+              <div className="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+                  <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
+                  <path d="M9 10h.01M15 10h.01M9.5 15s1 1.5 2.5 1.5 2.5-1.5 2.5-1.5" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
               </div>
-            )}
+              <p className="empty-title">Connect your wallet</p>
+              <p className="empty-sub">Connect to view your transaction history</p>
+            </div>
+          )}
 
-            {/* Loading */}
-            {(!mounted || isLoading) && (
-              <div className="loading-center" style={{ height: 160 }}>
-                <div className="page-spinner" />
+          {/* Empty */}
+          {mounted && isConnected && !isLoading && completed.length === 0 && (
+            <div className="empty">
+              <div className="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
+                  <path d="M12 2v10m0 0l-3-3m3 3l3-3M3 17l1.5 3h15L21 17" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
-            )}
+              <p className="empty-title">No transactions yet</p>
+              <p className="empty-sub">Completed payments will appear here</p>
+            </div>
+          )}
 
-            {/* Not connected */}
-            {mounted && !isConnected && !isLoading && (
-              <div className="tx-empty">
-                <p className="tx-empty-title">Connect your wallet to view transactions</p>
+          {/* Rows */}
+          {mounted && !isLoading && completed.map((tx) => (
+            <div key={tx.id} className="tx-row fade-in">
+              <div>
+                <p className="tx-name">{tx.title}</p>
+                {tx.paidAt && <p className="tx-date-sm">Paid {formatDate(tx.paidAt)}</p>}
               </div>
-            )}
+              <span className="tx-amount">
+                +{formatUSDC(tx.amount)}<span className="tx-amount-unit"> USDC</span>
+              </span>
+              <span className="tx-from">
+                {tx.paidBy ? shortenAddress(tx.paidBy) : "—"}
+              </span>
+              <span className="tx-date">{formatDate(tx.createdAt)}</span>
+              {tx.txHash ? (
+                <a
+                  href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tx-link"
+                >
+                  {shortenAddress(tx.txHash)} ↗
+                </a>
+              ) : (
+                <span className="tx-date">—</span>
+              )}
+            </div>
+          ))}
+        </div>
 
-            {/* Empty */}
-            {mounted && isConnected && !isLoading && completed.length === 0 && (
-              <div className="tx-empty">
-                <div className="tx-empty-emoji">💸</div>
-                <p className="tx-empty-title">No transactions yet</p>
-                <p className="tx-empty-sub">Completed payments will appear here</p>
-              </div>
-            )}
-
-            {/* Rows */}
-            {mounted && !isLoading && completed.map((tx, i) => (
-              <div key={tx.id} className="tx-row animate-fade-up">
-                <div>
-                  <p className="tx-title">{tx.title}</p>
-                  {tx.paidAt && <p className="tx-paid-at">Paid {formatDate(tx.paidAt)}</p>}
-                </div>
-                <span className="tx-amount">
-                  +{formatUSDC(tx.amount)}<span className="tx-amount-unit">USDC</span>
-                </span>
-                <span className="tx-from">
-                  {tx.paidBy ? shortenAddress(tx.paidBy) : "—"}
-                </span>
-                <span className="tx-date">{formatDate(tx.createdAt)}</span>
-                {tx.txHash ? (
-                  <a
-                    href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="tx-hash-link"
-                  >
-                    {shortenAddress(tx.txHash)} ↗
-                  </a>
-                ) : (
-                  <span className="tx-date">—</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </main>
-
-        <footer className="page-footer">
-          <span>ArcWave v0.1.0</span>
-          <span>Powered by Arc Network & Circle</span>
-        </footer>
       </div>
+
+      <footer className="app-footer">
+        <span>Conduit v0.1.0</span>
+        <div className="footer-links">
+          <a href="https://x.com/conduit_app" target="_blank" rel="noopener noreferrer" className="footer-link">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.845L1.255 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </a>
+          <a href="https://t.me/conduit_community" target="_blank" rel="noopener noreferrer" className="footer-link">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+              <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.94-.918c-.64-.203-.654-.64.136-.954l11.49-4.43c.532-.194.998.131.838.856z"/>
+            </svg>
+          </a>
+        </div>
+        <span>Built on Arc Network · Powered by Circle</span>
+      </footer>
     </div>
   );
 }
