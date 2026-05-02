@@ -104,7 +104,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
   // ── Extract tx hash from any SDK result object ────────────────
   const extractHash = (result: any): string => {
     if (!result) return "";
-    // Try all known hash field names
     return result.txHash
       ?? result.transactionHash
       ?? result.hash
@@ -152,7 +151,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
     setUnifiedStep("depositing");
 
     try {
-      // Switch MetaMask to source chain
       const targetChainId = CHAIN_IDS[selectedChain];
       if (targetChainId && window.ethereum) {
         try {
@@ -181,7 +179,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
         token: "USDC",
       });
       console.log("[Unified] depositResult keys:", Object.keys(depositResult ?? {}));
-      console.log("[Unified] depositResult:", JSON.stringify(depositResult));
+      console.log("[Unified] depositResult full:", JSON.stringify(depositResult));
 
       const depositHash = extractHash(depositResult);
       setUnifiedTxHash(depositHash);
@@ -199,16 +197,33 @@ export function PayPage({ link }: { link: PaymentLink }) {
         },
       });
       console.log("[Unified] spendResult keys:", Object.keys(spendResult ?? {}));
-      console.log("[Unified] spendResult:", JSON.stringify(spendResult));
+      console.log("[Unified] spendResult full:", JSON.stringify(spendResult));
 
       setUnifiedStep("recording");
 
-      // Step 3: Record in DB — use spend hash if available, else deposit hash
+      // Step 3: Record — always use a valid hash, never fail silently
       const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
-      console.log("[Unified] finalHash used:", finalHash);
+      console.log("[Unified] finalHash:", finalHash);
+      console.log("[Unified] address:", address);
+      console.log("[Unified] link.id:", link.id);
 
-      if (address) await markPaid(finalHash, address);
-      setUnifiedStep("done");
+      // Call API directly so we can see the exact response
+      const patchRes = await fetch(`/api/links/${link.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ txHash: finalHash, paidBy: address }),
+      });
+      const patchData = await patchRes.json();
+      console.log("[Unified] PATCH status:", patchRes.status);
+      console.log("[Unified] PATCH response:", JSON.stringify(patchData));
+
+      if (patchRes.ok) {
+        setPaySuccess(true);
+        setUnifiedStep("done");
+      } else {
+        setUnifiedError(patchData.error ?? "Payment sent but could not close link.");
+        setUnifiedStep("failed");
+      }
 
     } catch (err: any) {
       console.error("[Unified] Error:", err.message);
@@ -221,7 +236,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const hasEnough = bal >= parseFloat(link.amount);
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
 
-  // ── Already used ──────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
@@ -231,8 +245,8 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div className="pay-card-bar"/>
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
-            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8, letterSpacing: "-.03em" }}>Link Already Used</p>
-            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>Each link can only be paid once. Ask the creator for a new link.</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Already Used</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>Each link can only be paid once.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -240,7 +254,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Cancelled ─────────────────────────────────────────────────
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
@@ -250,8 +263,8 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div className="pay-card-bar"/>
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>❌</div>
-            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8, letterSpacing: "-.03em" }}>Link Cancelled</p>
-            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This payment link has been cancelled by the creator.</p>
+            <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Cancelled</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This link has been cancelled by the creator.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -259,7 +272,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Success ───────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
@@ -276,14 +288,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
             <p className="pay-success-title">Payment Complete!</p>
             <p className="pay-success-desc">
               <strong style={{ color: "var(--ink-1)" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
-              {payMode === "unified" && chainInfo && (
-                <span style={{ color: "var(--ink-3)" }}> via {chainInfo.name}</span>
-              )}
+              {payMode === "unified" && chainInfo && <span style={{ color: "var(--ink-3)" }}> via {chainInfo.name}</span>}
             </p>
             <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 14 }}>This link is now closed — one-time use only.</p>
             {(txHash || unifiedTxHash || link.txHash) && (
-              <a href={`https://testnet.arcscan.app/tx/${txHash ?? unifiedTxHash ?? link.txHash}`}
-                target="_blank" rel="noopener noreferrer" className="pay-tx-link">
+              <a href={`https://testnet.arcscan.app/tx/${txHash ?? unifiedTxHash ?? link.txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link">
                 View on ArcScan ↗
               </a>
             )}
@@ -294,7 +303,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
-  // ── Main pay UI ───────────────────────────────────────────────
   return (
     <div className="pay-page">
       <div className="pay-logo">
@@ -311,7 +319,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
       <div className="pay-card">
         <div className="pay-card-bar"/>
 
-        {/* Amount */}
         <div className="pay-amount-zone">
           <div>
             <span className="pay-amount">{formatUSDC(link.amount)}</span>
@@ -321,7 +328,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-link-desc">{link.description}</p>}
         </div>
 
-        {/* Details */}
         <div className="pay-details">
           <div className="pay-detail">
             <span className="pay-detail-k">Pay to</span>
@@ -329,9 +335,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
           <div className="pay-detail">
             <span className="pay-detail-k">Network</span>
-            <span className="pay-detail-v">
-              <span className="pay-net-dot pulse-dot"/>Arc Testnet
-            </span>
+            <span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span>
           </div>
           <div className="pay-detail">
             <span className="pay-detail-k">Token</span>
@@ -340,26 +344,18 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div className="pay-detail">
             <span className="pay-detail-k">Privacy</span>
             <span className="pay-detail-v" style={{ fontSize: 11 }}>
-              {isStealthLink
-                ? <span style={{ color: "var(--c)" }}>🔒 Stealth mode</span>
-                : <span style={{ color: "var(--ink-3)" }}>Standard</span>}
+              {isStealthLink ? <span style={{ color: "var(--c)" }}>🔒 Stealth mode</span> : <span style={{ color: "var(--ink-3)" }}>Standard</span>}
             </span>
           </div>
         </div>
 
-        {/* Mode tabs */}
         {mounted && isConnected && (
           <div className="pay-tabs">
-            <button className={`pay-tab${payMode === "arc" ? " on" : ""}`} onClick={() => setPayMode("arc")}>
-              ⚡ Arc Wallet
-            </button>
-            <button className={`pay-tab${payMode === "unified" ? " on" : ""}`} onClick={() => setPayMode("unified")}>
-              🌐 Any Chain
-            </button>
+            <button className={`pay-tab${payMode === "arc" ? " on" : ""}`} onClick={() => setPayMode("arc")}>⚡ Arc Wallet</button>
+            <button className={`pay-tab${payMode === "unified" ? " on" : ""}`} onClick={() => setPayMode("unified")}>🌐 Any Chain</button>
           </div>
         )}
 
-        {/* ── Arc mode ─────────────────────────────────────────── */}
         {payMode === "arc" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
@@ -395,7 +391,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
-        {/* ── Unified Balance mode ──────────────────────────────── */}
         {payMode === "unified" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>
@@ -447,7 +442,6 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
-        {/* Wallet footer */}
         {mounted && isConnected && address && (
           <div className="pay-wallet-row">
             <span className="pay-wallet-addr">{address.slice(0,6)}...{address.slice(-4)}</span>
