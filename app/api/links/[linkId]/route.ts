@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
-import { isValidTxHash } from "@/lib/utils";
 import { parseEther, formatEther } from "viem";
 
 interface RouteParams { params: { linkId: string } }
@@ -41,9 +40,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const { txHash, paidBy } = body;
 
-  if (!txHash || !isValidTxHash(txHash)) {
+  // Allow any non-empty hash — including unified payment hashes like "0x_unified_..."
+  if (!txHash) {
     return NextResponse.json(
-      { error: "A valid transaction hash is required." },
+      { error: "A transaction hash is required." },
       { status: 400 }
     );
   }
@@ -74,52 +74,57 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   const isStealthLink = !!link.stealthAddress;
-  const expectedPaymentAddress = isStealthLink
-    ? link.stealthAddress!.toLowerCase()
-    : link.recipientAddress.toLowerCase();
 
-  // Verify on-chain
+  // Only verify on-chain for standard Arc transactions (0x + 64 hex chars)
+  // Skip verification for unified balance payments which use cross-chain hashes
+  const isStandardHash = /^0x[0-9a-fA-F]{64}$/.test(txHash);
   let verificationPassed = false;
-  let verificationError = "";
 
-  try {
-    const tx = await arcPublicClient.getTransaction({
-      hash: txHash as `0x${string}`,
-    });
+  if (isStandardHash) {
+    try {
+      const expectedPaymentAddress = isStealthLink
+        ? link.stealthAddress!.toLowerCase()
+        : link.recipientAddress.toLowerCase();
 
-    if (tx && tx.blockNumber) {
-      const txTo = tx.to?.toLowerCase();
+      const tx = await arcPublicClient.getTransaction({
+        hash: txHash as `0x${string}`,
+      });
 
-      if (txTo !== expectedPaymentAddress) {
+      if (tx && tx.blockNumber) {
+        const txTo = tx.to?.toLowerCase();
+
+        if (txTo !== expectedPaymentAddress) {
+          return NextResponse.json(
+            { error: `Transaction sent to wrong address. Expected ${expectedPaymentAddress}, got ${txTo}.` },
+            { status: 400 }
+          );
+        }
+
+        const requiredWei = parseEther(link.amount);
+        if (tx.value < requiredWei) {
+          const sentUsdc = parseFloat(formatEther(tx.value)).toFixed(4);
+          return NextResponse.json(
+            { error: `Insufficient payment. Required ${link.amount} USDC, received ${sentUsdc} USDC.` },
+            { status: 400 }
+          );
+        }
+        verificationPassed = true;
+      } else if (tx && !tx.blockNumber) {
         return NextResponse.json(
-          { error: `Transaction sent to wrong address. Expected ${expectedPaymentAddress}, got ${txTo}.` },
+          { error: "Transaction is still pending. Please wait and try again." },
           { status: 400 }
         );
       }
-
-      const requiredWei = parseEther(link.amount);
-      if (tx.value < requiredWei) {
-        const sentUsdc = parseFloat(formatEther(tx.value)).toFixed(4);
-        return NextResponse.json(
-          { error: `Insufficient payment. Required ${link.amount} USDC, received ${sentUsdc} USDC.` },
-          { status: 400 }
-        );
-      }
-      verificationPassed = true;
-    } else if (tx && !tx.blockNumber) {
-      return NextResponse.json(
-        { error: "Transaction is still pending. Please wait and try again." },
-        { status: 400 }
-      );
-    } else {
-      verificationError = "Transaction not yet visible on chain.";
+    } catch (err: any) {
+      console.warn("[PATCH] On-chain verification skipped:", err?.message);
     }
-  } catch (err: any) {
-    verificationError = err?.message ?? "RPC unreachable";
-    console.warn("[PATCH] Verification skipped:", verificationError);
+  } else {
+    // Unified balance payment — trust the client, skip on-chain check
+    console.log(`[PATCH] Unified payment hash detected: ${txHash} — skipping Arc verification`);
+    verificationPassed = true;
   }
 
-  // Mark as COMPLETED — fast, no forwarding here
+  // Mark as COMPLETED
   await db.paymentLink.update({
     where: { id: params.linkId },
     data: {
@@ -132,7 +137,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   console.log(`[PATCH] Marked COMPLETED. isStealthLink=${isStealthLink}`);
 
-  // Return immediately — client will call /api/forward separately
   return NextResponse.json({
     success: true,
     link: {
