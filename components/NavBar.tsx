@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
@@ -60,21 +61,36 @@ export function NavBar() {
 
   const short = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
+  // Use white logo on dark mode, black logo on light mode
+  const logoSrc = mounted && !isDark ? "/conduit-logo-black.jpeg" : "/conduit-logo-white.jpeg";
+
   return (
     <>
       <nav className="nav">
         {/* Logo */}
         <Link href="/" className="nav-logo">
-          <div className="nav-logo-icon">
-            <svg viewBox="0 0 20 20" fill="none" width="13" height="13">
-              <rect x="2" y="7" width="16" height="3" rx="1.5" fill="black"/>
-              <rect x="2" y="11" width="16" height="3" rx="1.5" fill="black"/>
-            </svg>
-          </div>
-          <span className="nav-logo-text">Conduit</span>
+          {mounted ? (
+            <Image
+              src={logoSrc}
+              alt="Conduit"
+              width={110}
+              height={32}
+              style={{ height: 32, width: "auto", objectFit: "contain" }}
+              priority
+            />
+          ) : (
+            <Image
+              src="/conduit-logo-white.jpeg"
+              alt="Conduit"
+              width={110}
+              height={32}
+              style={{ height: 32, width: "auto", objectFit: "contain" }}
+              priority
+            />
+          )}
         </Link>
 
-        {/* Links */}
+        {/* Nav links */}
         <div className="nav-links">
           {LINKS.map((l) => (
             <Link
@@ -102,38 +118,23 @@ export function NavBar() {
           {mounted && (
             <>
               {isConnected ? (
-                <div
-                  className="nav-wallet"
-                  onClick={() => disconnect()}
-                  title="Click to disconnect"
-                >
+                <div className="nav-wallet" onClick={() => disconnect()} title="Click to disconnect">
                   <span className="nav-wallet-dot"/>
                   {short}
                 </div>
               ) : (
-                <button
-                  className="nav-connect-btn"
-                  onClick={() => connect({ connector: injected() })}
-                >
+                <button className="nav-connect-btn" onClick={() => connect({ connector: injected() })}>
                   Connect Wallet
                 </button>
               )}
             </>
           )}
 
-          <button
-            className="nav-theme-btn"
-            onClick={toggleTheme}
-            title={isDark ? "Switch to light" : "Switch to dark"}
-          >
+          <button className="nav-theme-btn" onClick={toggleTheme} title={isDark ? "Switch to light" : "Switch to dark"}>
             {mounted ? (isDark ? "☀️" : "🌙") : "☀️"}
           </button>
 
-          {/* Mobile hamburger */}
-          <button
-            className="nav-hamburger"
-            onClick={() => setDrawerOpen(!drawerOpen)}
-          >
+          <button className="nav-hamburger" onClick={() => setDrawerOpen(!drawerOpen)}>
             {drawerOpen
               ? <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
               : <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
