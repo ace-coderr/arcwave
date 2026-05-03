@@ -55,7 +55,7 @@ function Logo() {
       <img
         src="/conduit-logo-white.png"
         alt="Conduit"
-        style={{ height: 40, width: "auto", objectFit: "contain" }}
+        style={{ height: 100, width: "auto", objectFit: "contain" }}
       />
     </div>
   );
