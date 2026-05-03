@@ -8,8 +8,9 @@ export const metadata: Metadata = {
   title: "Conduit - The Payment Channel for Web3",
   description: "Create shareable USDC payment links. Pay from any chain. Privacy-protected. Instant settlement on Arc Network.",
   icons: {
-    icon: [{ url: "/conduit-icon.png", type: "image/png" }],
-    apple: "/conduit-icon.png",
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+    shortcut: "/favicon.png",
   },
   openGraph: {
     title: "Conduit - The Payment Channel for Web3",
@@ -24,7 +25,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('conduit-theme')==='light'){document.documentElement.setAttribute('data-theme','light')}}catch(e){}})()` }}/>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(localStorage.getItem('conduit-theme')==='light'){document.documentElement.setAttribute('data-theme','light')}}catch(e){}})()`,
+          }}
+        />
       </head>
       <body>
         <Web3Provider>{children}</Web3Provider>

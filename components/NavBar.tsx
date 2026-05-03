@@ -75,7 +75,7 @@ export function NavBar() {
               alt="Conduit"
               width={110}
               height={32}
-              style={{ height: 32, width: "auto", objectFit: "contain" }}
+              style={{ height: 100, width: "auto", objectFit: "contain" }}
               priority
             />
           ) : (
@@ -84,7 +84,7 @@ export function NavBar() {
               alt="Conduit"
               width={110}
               height={32}
-              style={{ height: 32, width: "auto", objectFit: "contain" }}
+              style={{ height: 100, width: "auto", objectFit: "contain" }}
               priority
             />
           )}
