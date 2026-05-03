@@ -67,7 +67,7 @@ export default function HomePage() {
 
                   <p className="hero-desc">
                     Conduit turns your wallet into a payment page.
-                    Create a link, share it, and receive USDC from anyone —
+                    Create a link, share it, and receive USDC from anyone -
                     no accounts, no KYC, no waiting.
                   </p>
 
