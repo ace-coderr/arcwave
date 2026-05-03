@@ -62,7 +62,7 @@ export function NavBar() {
   const short = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 
   // Use white logo on dark mode, black logo on light mode
-  const logoSrc = mounted && !isDark ? "/conduit-logo-black.jpeg" : "/conduit-logo-white.jpeg";
+  const logoSrc = mounted && !isDark ? "/conduit-logo-black.png" : "/conduit-logo-white.png";
 
   return (
     <>
@@ -80,7 +80,7 @@ export function NavBar() {
             />
           ) : (
             <Image
-              src="/conduit-logo-white.jpeg"
+              src="/conduit-logo-white.png"
               alt="Conduit"
               width={110}
               height={32}
