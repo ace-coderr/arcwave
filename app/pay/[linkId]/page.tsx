@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { PayPage } from "@/components/PayPage";
+import { calculateFee } from "@/lib/fees";
 import type { Metadata } from "next";
 
 interface PageProps { params: { linkId: string } }
@@ -16,6 +17,7 @@ export default async function PayPageRoute({ params }: PageProps) {
   if (!link) return notFound();
 
   const isStealthLink = !!link.stealthAddress;
+  const feeInfo = calculateFee(link.amount);
 
   return (
     <PayPage
@@ -29,6 +31,7 @@ export default async function PayPageRoute({ params }: PageProps) {
         status: link.status,
         txHash: link.txHash ?? undefined,
       }}
+      fee={feeInfo}
     />
   );
 }

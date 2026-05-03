@@ -23,17 +23,22 @@ interface PaymentLink {
   txHash?: string;
 }
 
+interface FeeInfo {
+  fee: string;
+  recipientAmount: string;
+  feePercent: string;
+}
+
 function maskAddress(address: string): string {
   if (!address || address.length < 10) return "••••••••";
   return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
 }
 
-// Shared logo component — uses real logo file
 function Logo() {
   return (
     <div className="pay-logo">
       <img
-        src="/conduit-logo-white.png"
+        src="/conduit-logo-white.jpeg"
         alt="Conduit"
         style={{ height: 28, width: "auto", objectFit: "contain" }}
       />
@@ -44,7 +49,7 @@ function Logo() {
 type PayMode = "arc" | "unified";
 type UnifiedStep = "idle" | "depositing" | "spending" | "recording" | "done" | "failed";
 
-export function PayPage({ link }: { link: PaymentLink }) {
+export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   const [mounted, setMounted] = useState(false);
   const [payMode, setPayMode] = useState<PayMode>("arc");
   const [selectedChain, setSelectedChain] = useState<SourceChainId>("Base_Sepolia");
@@ -120,23 +125,16 @@ export function PayPage({ link }: { link: PaymentLink }) {
   };
 
   const handleArcPay = () => {
-    if (!paymentTarget) { setError("Payment target not available. Please refresh."); return; }
+    if (!paymentTarget) { setError("Payment target not available."); return; }
     setError("");
     sendTransaction(
       { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
       {
-        onSuccess: (hash) => {
-          setTxHash(hash);
-          if (address) markPaid(hash, address, "arc");
-        },
+        onSuccess: (hash) => { setTxHash(hash); if (address) markPaid(hash, address, "arc"); },
         onError: (err: Error) => {
-          if (err.message?.includes("rejected") || err.message?.includes("denied")) {
-            setError("Transaction rejected in MetaMask.");
-          } else if (err.message?.includes("insufficient")) {
-            setError("Insufficient USDC balance.");
-          } else {
-            setError("Transaction failed. Please try again.");
-          }
+          if (err.message?.includes("rejected") || err.message?.includes("denied")) setError("Transaction rejected.");
+          else if (err.message?.includes("insufficient")) setError("Insufficient USDC balance.");
+          else setError("Transaction failed. Please try again.");
         },
       }
     );
@@ -160,7 +158,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
             params: [{ chainId: `0x${targetChainId.toString(16)}` }],
           });
         } catch (switchErr: any) {
-          if (switchErr.code === 4902) throw new Error(`Please add ${chainInfo?.name} network to MetaMask first.`);
+          if (switchErr.code === 4902) throw new Error(`Please add ${chainInfo?.name} to MetaMask first.`);
           throw switchErr;
         }
       }
@@ -195,6 +193,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
   const hasEnough = bal >= parseFloat(link.amount);
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
 
+  // ── Completed ─────────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
@@ -211,6 +210,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Expired ───────────────────────────────────────────────────
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
@@ -219,7 +219,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>❌</div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Cancelled</p>
-            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This link has been cancelled by the creator.</p>
+            <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This link has been cancelled.</p>
           </div>
         </div>
         <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -227,6 +227,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Success ───────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
@@ -256,6 +257,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
     );
   }
 
+  // ── Main UI ───────────────────────────────────────────────────
   return (
     <div className="pay-page">
       <Logo/>
@@ -264,6 +266,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
       <div className="pay-card">
         <div className="pay-card-bar"/>
 
+        {/* Amount */}
         <div className="pay-amount-zone">
           <div>
             <span className="pay-amount">{formatUSDC(link.amount)}</span>
@@ -273,18 +276,41 @@ export function PayPage({ link }: { link: PaymentLink }) {
           {link.description && <p className="pay-link-desc">{link.description}</p>}
         </div>
 
+        {/* Details */}
         <div className="pay-details">
-          <div className="pay-detail"><span className="pay-detail-k">Pay to</span><span className="pay-detail-v">{displayAddress}</span></div>
-          <div className="pay-detail"><span className="pay-detail-k">Network</span><span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span></div>
-          <div className="pay-detail"><span className="pay-detail-k">Token</span><span className="pay-detail-v">USDC (native)</span></div>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Pay to</span>
+            <span className="pay-detail-v">{displayAddress}</span>
+          </div>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Network</span>
+            <span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span>
+          </div>
+          <div className="pay-detail">
+            <span className="pay-detail-k">Token</span>
+            <span className="pay-detail-v">USDC (native)</span>
+          </div>
           <div className="pay-detail">
             <span className="pay-detail-k">Privacy</span>
             <span className="pay-detail-v" style={{ fontSize: 11 }}>
               {isStealthLink ? <span style={{ color: "var(--c)" }}>🔒 Stealth mode</span> : <span style={{ color: "var(--ink-3)" }}>Standard</span>}
             </span>
           </div>
+
+          {/* Fee row */}
+          {fee && (
+            <div className="pay-detail" style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
+              <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>
+                Service fee ({fee.feePercent})
+              </span>
+              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>
+                {fee.fee} USDC
+              </span>
+            </div>
+          )}
         </div>
 
+        {/* Mode tabs */}
         {mounted && isConnected && (
           <div className="pay-tabs">
             <button className={`pay-tab${payMode === "arc" ? " on" : ""}`} onClick={() => setPayMode("arc")}>⚡ Arc Wallet</button>
@@ -292,6 +318,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
+        {/* ── Arc mode ── */}
         {payMode === "arc" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
@@ -327,6 +354,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
 
+        {/* ── Unified mode ── */}
         {payMode === "unified" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>
@@ -347,12 +375,11 @@ export function PayPage({ link }: { link: PaymentLink }) {
             ) : unifiedStep === "depositing" ? (
               <div className="pay-spin-zone"><div className="pay-spinner"/>
                 <p className="pay-spin-text">Step 1/2 — Depositing from {chainInfo?.name}...</p>
-                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm in MetaMask on {chainInfo?.name}</p>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm in MetaMask</p>
               </div>
             ) : unifiedStep === "spending" ? (
               <div className="pay-spin-zone"><div className="pay-spinner"/>
                 <p className="pay-spin-text">Step 2/2 — Routing to Arc Network...</p>
-                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm spend in MetaMask</p>
               </div>
             ) : unifiedStep === "recording" ? (
               <div className="pay-spin-zone"><div className="pay-spinner"/><p className="pay-spin-text">Recording payment...</p></div>
@@ -364,9 +391,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
                 <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>2 MetaMask confirmations required</p>
               </>
             )}
-            {unifiedStep === "failed" && unifiedError && (
-              <div className="pay-err-box" style={{ marginTop: 12 }}>{unifiedError}</div>
-            )}
+            {unifiedStep === "failed" && unifiedError && <div className="pay-err-box" style={{ marginTop: 12 }}>{unifiedError}</div>}
           </div>
         )}
 
@@ -377,6 +402,7 @@ export function PayPage({ link }: { link: PaymentLink }) {
           </div>
         )}
       </div>
+
       <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );

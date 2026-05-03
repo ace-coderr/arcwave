@@ -1,8 +1,9 @@
 // lib/stealthWallet.ts
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { createWalletClient, createPublicClient, http, formatEther } from "viem";
+import { createWalletClient, createPublicClient, http, formatEther, parseEther } from "viem";
 import { arcTestnet } from "./arcChain";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
+import { FEE_CONFIG, calculateFee } from "./fees";
 
 const ALGORITHM = "aes-256-gcm";
 
@@ -34,12 +35,10 @@ export function decryptPrivateKey(encryptedData: string): string {
   return decrypted;
 }
 
-// Ensure private key always has 0x prefix — viem requires it
 function formatPrivateKey(key: string): `0x${string}` {
   const cleaned = key.trim().replace(/\s/g, "");
   const stripped = cleaned.startsWith("0x") || cleaned.startsWith("0X")
-    ? cleaned.slice(2)
-    : cleaned;
+    ? cleaned.slice(2) : cleaned;
   return `0x${stripped}` as `0x${string}`;
 }
 
@@ -62,15 +61,8 @@ export async function forwardFunds(
 ): Promise<{ success: boolean; txHash?: string; error?: string }> {
   try {
     const forwarderKey = process.env.FORWARDER_PRIVATE_KEY;
+    if (!forwarderKey) return { success: false, error: "FORWARDER_PRIVATE_KEY not configured." };
 
-    if (!forwarderKey) {
-      return {
-        success: false,
-        error: "FORWARDER_PRIVATE_KEY not configured.",
-      };
-    }
-
-    // Format private keys with 0x prefix
     const rawPrivateKey = decryptPrivateKey(encryptedPrivateKey);
     const stealthPrivateKey = formatPrivateKey(rawPrivateKey);
     const stealthAccount = privateKeyToAccount(stealthPrivateKey);
@@ -78,9 +70,9 @@ export async function forwardFunds(
     const forwarderPrivateKey = formatPrivateKey(forwarderKey);
     const forwarderAccount = privateKeyToAccount(forwarderPrivateKey);
 
-    console.log(`[forward] Stealth address: ${stealthAccount.address}`);
-    console.log(`[forward] Forwarder address: ${forwarderAccount.address}`);
+    console.log(`[forward] Stealth: ${stealthAccount.address}`);
     console.log(`[forward] Recipient: ${recipientAddress}`);
+    console.log(`[forward] Amount: ${paymentAmount} USDC`);
 
     const publicClient = createPublicClient({
       chain: arcTestnet,
@@ -99,99 +91,66 @@ export async function forwardFunds(
       transport: http("https://rpc.testnet.arc.network"),
     });
 
-    // Step 1: Check forwarder balance first
-    const forwarderBalance = await publicClient.getBalance({
-      address: forwarderAccount.address,
-    });
-    console.log(`[forward] Forwarder balance: ${formatEther(forwarderBalance)} USDC`);
-
-    if (forwarderBalance === BigInt(0)) {
-      return {
-        success: false,
-        error: "Forwarder wallet has no USDC to pay gas.",
-      };
-    }
-
-    // Step 2: Check stealth wallet balance
-    const stealthBalance = await publicClient.getBalance({
-      address: stealthAccount.address,
-    });
+    // Check stealth balance
+    const stealthBalance = await publicClient.getBalance({ address: stealthAccount.address });
     console.log(`[forward] Stealth balance: ${formatEther(stealthBalance)} USDC`);
 
     if (stealthBalance === BigInt(0)) {
-      return {
-        success: false,
-        error: "Stealth wallet balance is 0 — payment not yet confirmed.",
-      };
+      return { success: false, error: "Stealth wallet balance is 0 — payment not yet confirmed." };
     }
 
-    // Step 3: Get current gas price
+    // Fund stealth wallet with gas
     const gasPrice = await publicClient.getGasPrice();
     const gasLimit = BigInt(21000);
-    const gasCost = gasPrice * gasLimit;
+    const gasFunding = gasPrice * gasLimit * BigInt(5);
 
-    // Use 5x gas cost as funding — very safe buffer
-    const gasFunding = gasCost * BigInt(5);
-
-    console.log(`[forward] gasPrice: ${gasPrice}`);
-    console.log(`[forward] gasCost: ${formatEther(gasCost)} USDC`);
-    console.log(`[forward] gasFunding (5x): ${formatEther(gasFunding)} USDC`);
-    console.log(`[forward] Forwarder sending gas to stealth wallet...`);
-
-    // Step 4: Fund stealth wallet with gas from forwarder
     const fundTxHash = await forwarderClient.sendTransaction({
       to: stealthAccount.address,
       value: gasFunding,
     });
+    await publicClient.waitForTransactionReceipt({ hash: fundTxHash, timeout: 20_000 });
 
-    console.log(`[forward] Gas funding tx sent: ${fundTxHash}`);
+    // Get updated balance
+    const balanceAfterFunding = await publicClient.getBalance({ address: stealthAccount.address });
+    const gasCostBuffer = gasPrice * gasLimit * BigInt(3);
 
-    // Wait for gas funding to confirm
-    await publicClient.waitForTransactionReceipt({
-      hash: fundTxHash,
-      timeout: 20_000,
-    });
-    console.log(`[forward] Gas funding confirmed`);
+    // Calculate fee split
+    const { fee, recipientAmount } = calculateFee(paymentAmount);
+    const feeWei = parseEther(fee);
+    const recipientWei = parseEther(recipientAmount);
 
-    // Step 5: Get updated stealth balance after gas funding
-    const balanceAfterFunding = await publicClient.getBalance({
-      address: stealthAccount.address,
-    });
-    console.log(`[forward] Stealth balance after funding: ${formatEther(balanceAfterFunding)} USDC`);
+    console.log(`[forward] Fee (${FEE_CONFIG.percentage}%): ${fee} USDC → ${FEE_CONFIG.collectorAddress}`);
+    console.log(`[forward] Recipient gets: ${recipientAmount} USDC`);
 
-    // Step 6: Calculate amount to forward
-    // Subtract 3x gas cost as buffer so stealth wallet can definitely pay gas
-    const gasCostBuffer = gasCost * BigInt(3);
-    const amountToForward = balanceAfterFunding - gasCostBuffer;
-
-    console.log(`[forward] gasCostBuffer (3x): ${formatEther(gasCostBuffer)} USDC`);
-    console.log(`[forward] amountToForward: ${formatEther(amountToForward)} USDC`);
-
-    if (amountToForward <= BigInt(0)) {
-      return {
-        success: false,
-        error: `Not enough balance to forward. Balance: ${formatEther(balanceAfterFunding)}, buffer: ${formatEther(gasCostBuffer)}`,
-      };
+    // Send fee to collector (skip if collector is same as recipient)
+    if (
+      feeWei > BigInt(0) &&
+      FEE_CONFIG.collectorAddress.toLowerCase() !== recipientAddress.toLowerCase()
+    ) {
+      try {
+        const feeTxHash = await stealthClient.sendTransaction({
+          to: FEE_CONFIG.collectorAddress as `0x${string}`,
+          value: feeWei,
+          gas: gasLimit,
+          gasPrice,
+        });
+        await publicClient.waitForTransactionReceipt({ hash: feeTxHash, timeout: 20_000 });
+        console.log(`[forward] Fee sent: ${feeTxHash}`);
+      } catch (feeErr: any) {
+        console.warn(`[forward] Fee transfer failed (continuing): ${feeErr.message}`);
+      }
     }
 
-    // Step 7: Forward from stealth wallet to real recipient
-    console.log(`[forward] Sending ${formatEther(amountToForward)} USDC to ${recipientAddress}`);
-
+    // Send recipient amount
     const forwardTxHash = await stealthClient.sendTransaction({
       to: recipientAddress as `0x${string}`,
-      value: amountToForward,
+      value: recipientWei,
       gas: gasLimit,
-      gasPrice: gasPrice,
+      gasPrice,
     });
 
-    console.log(`[forward] Forward tx sent: ${forwardTxHash}`);
-
-    // Wait for forward to confirm
-    await publicClient.waitForTransactionReceipt({
-      hash: forwardTxHash,
-      timeout: 20_000,
-    });
-    console.log(`[forward] Forward confirmed! Done.`);
+    await publicClient.waitForTransactionReceipt({ hash: forwardTxHash, timeout: 20_000 });
+    console.log(`[forward] Forwarded to recipient: ${forwardTxHash}`);
 
     return { success: true, txHash: forwardTxHash };
   } catch (err: any) {
