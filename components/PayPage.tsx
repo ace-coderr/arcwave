@@ -12,6 +12,20 @@ import { arcTestnet } from "@/lib/arcChain";
 import { formatUSDC } from "@/lib/utils";
 import { SOURCE_CHAINS, type SourceChainId, getAppKit, createBrowserAdapter } from "@/lib/appKit";
 
+// Fee config — must match lib/fees.ts
+const FEE_COLLECTOR = "0x2d2eba8c0da5879ab25b5bd37e211d230aabbb5c";
+const FEE_PERCENT = 0.5;
+
+function calcFee(amount: string) {
+  const total = parseFloat(amount);
+  const fee = Math.max((total * FEE_PERCENT) / 100, 0.001);
+  const recipientAmount = total - fee;
+  return {
+    fee: fee.toFixed(4),
+    recipientAmount: recipientAmount.toFixed(4),
+  };
+}
+
 interface PaymentLink {
   id: string;
   title: string;
@@ -48,15 +62,18 @@ function Logo() {
 
 type PayMode = "arc" | "unified";
 type UnifiedStep = "idle" | "depositing" | "spending" | "recording" | "done" | "failed";
+type ArcStep = "idle" | "sending_payment" | "sending_fee" | "recording" | "done" | "failed";
 
 export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   const [mounted, setMounted] = useState(false);
   const [payMode, setPayMode] = useState<PayMode>("arc");
   const [selectedChain, setSelectedChain] = useState<SourceChainId>("Base_Sepolia");
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
+  const [feeTxHash, setFeeTxHash] = useState<`0x${string}` | undefined>();
   const [error, setError] = useState("");
   const [paySuccess, setPaySuccess] = useState(link.status === "COMPLETED");
   const [isMarkingPaid, setIsMarkingPaid] = useState(false);
+  const [arcStep, setArcStep] = useState<ArcStep>("idle");
 
   const [unifiedStep, setUnifiedStep] = useState<UnifiedStep>("idle");
   const [unifiedTxHash, setUnifiedTxHash] = useState("");
@@ -73,25 +90,63 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   const displayAddress = link.stealthAddress
     ? maskAddress(link.stealthAddress)
     : link.recipientAddress
-    ? maskAddress(link.recipientAddress)
-    : "••••••••••••••••••";
+      ? maskAddress(link.recipientAddress)
+      : "••••••••••••••••••";
+
+  const { fee: feeAmount, recipientAmount } = calcFee(link.amount);
 
   const { data: balance } = useBalance({ address, chainId: arcTestnet.id });
-  const { sendTransaction, isPending } = useSendTransaction();
-  const { isLoading: isWaiting, isSuccess: txConfirmed } = useWaitForTransactionReceipt({
+
+  // Tx 1 — main payment (to recipient or stealth)
+  const { sendTransaction: sendPayment, isPending: isPaymentPending } = useSendTransaction();
+  const { isLoading: isPaymentWaiting, isSuccess: paymentConfirmed } = useWaitForTransactionReceipt({
     hash: txHash,
+    chainId: arcTestnet.id,
+  });
+
+  // Tx 2 — fee payment (to collector)
+  const { sendTransaction: sendFee, isPending: isFeePending } = useSendTransaction();
+  const { isLoading: isFeeWaiting, isSuccess: feeConfirmed } = useWaitForTransactionReceipt({
+    hash: feeTxHash,
     chainId: arcTestnet.id,
   });
 
   useEffect(() => { setMounted(true); }, []);
 
+  // After payment confirms → send fee
   useEffect(() => {
-    if (txConfirmed && txHash && address && !paySuccess) {
-      markPaid(txHash, address, "arc");
+    if (paymentConfirmed && txHash && arcStep === "sending_payment") {
+      setArcStep("sending_fee");
+      // Send fee transaction
+      sendFee(
+        {
+          to: FEE_COLLECTOR as `0x${string}`,
+          value: parseEther(feeAmount),
+          chainId: arcTestnet.id,
+        },
+        {
+          onSuccess: (hash) => {
+            setFeeTxHash(hash);
+          },
+          onError: (err: Error) => {
+            console.warn("[fee] Fee tx failed:", err.message);
+            // Fee failed — still record the payment
+            if (address && txHash) recordPayment(txHash, address);
+          },
+        }
+      );
     }
-  }, [txConfirmed]);
+  }, [paymentConfirmed]);
 
-  const markPaid = async (hash: string, payer: string, type: "arc" | "unified" = "arc") => {
+  // After fee confirms → record payment
+  useEffect(() => {
+    if (feeConfirmed && feeTxHash && arcStep === "sending_fee") {
+      setArcStep("recording");
+      if (address && txHash) recordPayment(txHash, address);
+    }
+  }, [feeConfirmed]);
+
+  const recordPayment = async (hash: string, payer: string, type: "arc" | "unified" = "arc") => {
     setIsMarkingPaid(true);
     setError("");
     try {
@@ -103,6 +158,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
       setPaySuccess(true);
+      setArcStep("done");
       if (data.requiresForward) {
         fetch("/api/forward", {
           method: "POST",
@@ -111,33 +167,46 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
         }).catch(console.error);
       }
     } catch (e: any) {
-      if (txConfirmed) setPaySuccess(true);
+      if (paymentConfirmed) { setPaySuccess(true); setArcStep("done"); }
       else setError("Network error. Transaction was sent — save tx hash: " + hash);
     } finally {
       setIsMarkingPaid(false);
     }
   };
 
+  const handleArcPay = () => {
+    if (!paymentTarget) { setError("Payment target not available."); return; }
+    setError("");
+    setArcStep("sending_payment");
+
+    sendPayment(
+      {
+        to: paymentTarget,
+        value: parseEther(recipientAmount), // send recipient amount (amount - fee)
+        chainId: arcTestnet.id,
+      },
+      {
+        onSuccess: (hash) => {
+          setTxHash(hash);
+        },
+        onError: (err: Error) => {
+          setArcStep("idle");
+          if (err.message?.includes("rejected") || err.message?.includes("denied")) {
+            setError("Transaction rejected.");
+          } else if (err.message?.includes("insufficient")) {
+            setError("Insufficient USDC balance.");
+          } else {
+            setError("Transaction failed. Please try again.");
+          }
+        },
+      }
+    );
+  };
+
   const extractHash = (result: any): string => {
     if (!result) return "";
     return result.txHash ?? result.transactionHash ?? result.hash
       ?? result.receipt?.transactionHash ?? result.receipt?.txHash ?? "";
-  };
-
-  const handleArcPay = () => {
-    if (!paymentTarget) { setError("Payment target not available."); return; }
-    setError("");
-    sendTransaction(
-      { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
-      {
-        onSuccess: (hash) => { setTxHash(hash); if (address) markPaid(hash, address, "arc"); },
-        onError: (err: Error) => {
-          if (err.message?.includes("rejected") || err.message?.includes("denied")) setError("Transaction rejected.");
-          else if (err.message?.includes("insufficient")) setError("Insufficient USDC balance.");
-          else setError("Transaction failed. Please try again.");
-        },
-      }
-    );
   };
 
   const CHAIN_IDS: Record<string, number> = {
@@ -181,7 +250,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       setUnifiedStep("recording");
 
       const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
-      if (address) await markPaid(finalHash, address, "unified");
+      if (address) await recordPayment(finalHash, address, "unified");
       setUnifiedStep("done");
     } catch (err: any) {
       setUnifiedError(err.message ?? "Cross-chain payment failed.");
@@ -190,15 +259,28 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   };
 
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
-  const hasEnough = bal >= parseFloat(link.amount);
+  const totalNeeded = parseFloat(link.amount);
+  const hasEnough = bal >= totalNeeded;
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
+
+  const isArcBusy = arcStep === "sending_payment" || arcStep === "sending_fee" || arcStep === "recording"
+    || isPaymentPending || isPaymentWaiting || isFeePending || isFeeWaiting || isMarkingPaid;
+
+  const arcStatusText = () => {
+    if (isPaymentPending) return "Confirm payment in MetaMask...";
+    if (isPaymentWaiting) return "Confirming payment...";
+    if (arcStep === "sending_fee" && isFeePending) return "Confirm fee in MetaMask...";
+    if (arcStep === "sending_fee" && isFeeWaiting) return "Confirming fee...";
+    if (isMarkingPaid) return "Recording payment...";
+    return "Processing...";
+  };
 
   // ── Completed ─────────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
-        <Logo/><p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card"><div className="pay-card-bar"/>
+        <Logo /><p className="pay-tagline">PAYMENT REQUEST</p>
+        <div className="pay-card"><div className="pay-card-bar" />
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>🔒</div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Already Used</p>
@@ -214,8 +296,8 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
-        <Logo/><p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card"><div className="pay-card-bar"/>
+        <Logo /><p className="pay-tagline">PAYMENT REQUEST</p>
+        <div className="pay-card"><div className="pay-card-bar" />
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
             <div style={{ fontSize: 40, marginBottom: 14 }}>❌</div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Cancelled</p>
@@ -231,12 +313,12 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   if (paySuccess) {
     return (
       <div className="pay-page">
-        <Logo/><p className="pay-tagline">PAYMENT REQUEST</p>
-        <div className="pay-card"><div className="pay-card-bar"/>
+        <Logo /><p className="pay-tagline">PAYMENT REQUEST</p>
+        <div className="pay-card"><div className="pay-card-bar" />
           <div className="pay-actions" style={{ textAlign: "center" }}>
             <div className="pay-success-icon">
               <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
-                <path d="M5 12l4.5 4.5L19 7" stroke="var(--c)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M5 12l4.5 4.5L19 7" stroke="var(--c)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <p className="pay-success-title">Payment Complete!</p>
@@ -260,11 +342,11 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   // ── Main UI ───────────────────────────────────────────────────
   return (
     <div className="pay-page">
-      <Logo/>
+      <Logo />
       <p className="pay-tagline">PAYMENT REQUEST</p>
 
       <div className="pay-card">
-        <div className="pay-card-bar"/>
+        <div className="pay-card-bar" />
 
         {/* Amount */}
         <div className="pay-amount-zone">
@@ -284,7 +366,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           </div>
           <div className="pay-detail">
             <span className="pay-detail-k">Network</span>
-            <span className="pay-detail-v"><span className="pay-net-dot pulse-dot"/>Arc Testnet</span>
+            <span className="pay-detail-v"><span className="pay-net-dot pulse-dot" />Arc Testnet</span>
           </div>
           <div className="pay-detail">
             <span className="pay-detail-k">Token</span>
@@ -297,17 +379,17 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
             </span>
           </div>
 
-          {/* Fee row */}
-          {fee && (
-            <div className="pay-detail" style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
-              <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>
-                Service fee ({fee.feePercent})
-              </span>
-              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>
-                {fee.fee} USDC
-              </span>
+          {/* Fee breakdown */}
+          <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
+            <div className="pay-detail">
+              <span className="pay-detail-k">Recipient gets</span>
+              <span className="pay-detail-v" style={{ color: "var(--c)" }}>{recipientAmount} USDC</span>
             </div>
-          )}
+            <div className="pay-detail" style={{ marginTop: 6 }}>
+              <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>Service fee ({FEE_PERCENT}%)</span>
+              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>{feeAmount} USDC</span>
+            </div>
+          </div>
         </div>
 
         {/* Mode tabs */}
@@ -322,7 +404,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
         {payMode === "arc" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16 }}>
-              <p style={{ fontSize: 11, color: "var(--ink-3)" }}>⚡ Direct payment on Arc Network — instant, lowest fees</p>
+              <p style={{ fontSize: 11, color: "var(--ink-3)" }}>⚡ Direct payment on Arc Network — 2 quick confirmations</p>
             </div>
             {!mounted ? null : !isConnected ? (
               <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>Connect Wallet to Pay</button>
@@ -331,17 +413,41 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
                 <div className="pay-warn-box">⚠️ Switch to Arc Testnet to continue.</div>
                 <button className="pay-switch-btn" onClick={() => switchChain({ chainId: arcTestnet.id })}>Switch to Arc Testnet</button>
               </>
-            ) : isPending || isWaiting || isMarkingPaid ? (
+            ) : isArcBusy ? (
               <div className="pay-spin-zone">
-                <div className="pay-spinner"/>
-                <p className="pay-spin-text">{isPending ? "Confirm in MetaMask..." : isWaiting ? "Waiting for confirmation..." : "Recording payment..."}</p>
-                {txHash && <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ marginTop: 8 }}>Track on ArcScan ↗</a>}
+                <div className="pay-spinner" />
+                <p className="pay-spin-text">{arcStatusText()}</p>
+                {/* Progress indicator */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: txHash ? "var(--c)" : "var(--stroke2)" }} />
+                    <span style={{ fontSize: 10, color: txHash ? "var(--c)" : "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Payment</span>
+                  </div>
+                  <div style={{ width: 20, height: 1, background: "var(--stroke2)" }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: feeTxHash ? "var(--c)" : "var(--stroke2)" }} />
+                    <span style={{ fontSize: 10, color: feeTxHash ? "var(--c)" : "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Fee</span>
+                  </div>
+                </div>
+                {txHash && (
+                  <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ marginTop: 8 }}>
+                    Track payment ↗
+                  </a>
+                )}
               </div>
             ) : (
               <>
-                <button className="pay-connect-btn" onClick={handleArcPay} disabled={!hasEnough || !paymentTarget} style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}>
+                <button
+                  className="pay-connect-btn"
+                  onClick={handleArcPay}
+                  disabled={!hasEnough || !paymentTarget}
+                  style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}
+                >
                   Pay {formatUSDC(link.amount)} USDC
                 </button>
+                <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
+                  2 confirmations — payment + fee
+                </p>
                 {balance && (
                   <p className={`pay-bal${!hasEnough ? " low" : ""}`}>
                     Balance: <span style={{ color: "var(--ink-2)" }}>{bal.toFixed(4)} USDC</span>
@@ -373,16 +479,16 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
             {!mounted ? null : !isConnected ? (
               <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>Connect Wallet to Pay</button>
             ) : unifiedStep === "depositing" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner"/>
+              <div className="pay-spin-zone"><div className="pay-spinner" />
                 <p className="pay-spin-text">Step 1/2 — Depositing from {chainInfo?.name}...</p>
                 <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm in MetaMask</p>
               </div>
             ) : unifiedStep === "spending" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner"/>
+              <div className="pay-spin-zone"><div className="pay-spinner" />
                 <p className="pay-spin-text">Step 2/2 — Routing to Arc Network...</p>
               </div>
             ) : unifiedStep === "recording" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner"/><p className="pay-spin-text">Recording payment...</p></div>
+              <div className="pay-spin-zone"><div className="pay-spinner" /><p className="pay-spin-text">Recording payment...</p></div>
             ) : (
               <>
                 <button className="pay-connect-btn" onClick={handleUnifiedPay} style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}>
@@ -397,7 +503,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
 
         {mounted && isConnected && address && (
           <div className="pay-wallet-row">
-            <span className="pay-wallet-addr">{address.slice(0,6)}...{address.slice(-4)}</span>
+            <span className="pay-wallet-addr">{address.slice(0, 6)}...{address.slice(-4)}</span>
             <button className="pay-disc-btn" onClick={() => disconnect()}>Disconnect</button>
           </div>
         )}
