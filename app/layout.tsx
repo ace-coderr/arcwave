@@ -5,14 +5,14 @@ import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Conduit — The Payment Channel for Web3",
+  title: "Conduit - The Payment Channel for Web3",
   description: "Create shareable USDC payment links. Pay from any chain. Privacy-protected. Instant settlement on Arc Network.",
   icons: {
     icon: [{ url: "/conduit-icon.png", type: "image/png" }],
     apple: "/conduit-icon.png",
   },
   openGraph: {
-    title: "Conduit — The Payment Channel for Web3",
+    title: "Conduit - The Payment Channel for Web3",
     description: "Create a payment link, share it, get paid in USDC from any chain.",
     siteName: "Conduit",
     type: "website",
