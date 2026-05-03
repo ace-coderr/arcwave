@@ -18,11 +18,12 @@ const FEE_PERCENT = 0.5;
 
 function calcFee(amount: string) {
   const total = parseFloat(amount);
+  // Fee is ON TOP — recipient gets full amount, payer pays amount + fee
   const fee = Math.max((total * FEE_PERCENT) / 100, 0.001);
-  const recipientAmount = total - fee;
   return {
     fee: fee.toFixed(4),
-    recipientAmount: recipientAmount.toFixed(4),
+    recipientAmount: amount, // recipient always gets full amount
+    totalPays: (total + fee).toFixed(4), // payer pays amount + fee
   };
 }
 
@@ -93,11 +94,11 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       ? maskAddress(link.recipientAddress)
       : "••••••••••••••••••";
 
-  const { fee: feeAmount, recipientAmount } = calcFee(link.amount);
+  const { fee: feeAmount, totalPays } = calcFee(link.amount);
 
   const { data: balance } = useBalance({ address, chainId: arcTestnet.id });
 
-  // Tx 1 — main payment (to recipient or stealth)
+  // Tx 1 — main payment (full amount to recipient or stealth)
   const { sendTransaction: sendPayment, isPending: isPaymentPending } = useSendTransaction();
   const { isLoading: isPaymentWaiting, isSuccess: paymentConfirmed } = useWaitForTransactionReceipt({
     hash: txHash,
@@ -117,7 +118,6 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   useEffect(() => {
     if (paymentConfirmed && txHash && arcStep === "sending_payment") {
       setArcStep("sending_fee");
-      // Send fee transaction
       sendFee(
         {
           to: FEE_COLLECTOR as `0x${string}`,
@@ -125,9 +125,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           chainId: arcTestnet.id,
         },
         {
-          onSuccess: (hash) => {
-            setFeeTxHash(hash);
-          },
+          onSuccess: (hash) => { setFeeTxHash(hash); },
           onError: (err: Error) => {
             console.warn("[fee] Fee tx failed:", err.message);
             // Fee failed — still record the payment
@@ -182,13 +180,11 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     sendPayment(
       {
         to: paymentTarget,
-        value: parseEther(recipientAmount), // send recipient amount (amount - fee)
+        value: parseEther(link.amount), // ✅ send FULL amount to recipient
         chainId: arcTestnet.id,
       },
       {
-        onSuccess: (hash) => {
-          setTxHash(hash);
-        },
+        onSuccess: (hash) => { setTxHash(hash); },
         onError: (err: Error) => {
           setArcStep("idle");
           if (err.message?.includes("rejected") || err.message?.includes("denied")) {
@@ -259,7 +255,8 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   };
 
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
-  const totalNeeded = parseFloat(link.amount);
+  // Payer needs amount + fee
+  const totalNeeded = parseFloat(totalPays);
   const hasEnough = bal >= totalNeeded;
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
 
@@ -383,11 +380,15 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
             <div className="pay-detail">
               <span className="pay-detail-k">Recipient gets</span>
-              <span className="pay-detail-v" style={{ color: "var(--c)" }}>{recipientAmount} USDC</span>
+              <span className="pay-detail-v" style={{ color: "var(--c)" }}>{link.amount} USDC</span>
             </div>
             <div className="pay-detail" style={{ marginTop: 6 }}>
               <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>Service fee ({FEE_PERCENT}%)</span>
-              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>{feeAmount} USDC</span>
+              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>+{feeAmount} USDC</span>
+            </div>
+            <div className="pay-detail" style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--stroke)" }}>
+              <span className="pay-detail-k" style={{ fontWeight: 700, color: "var(--ink-1)" }}>Total you pay</span>
+              <span className="pay-detail-v" style={{ fontWeight: 800, color: "var(--ink-1)" }}>{totalPays} USDC</span>
             </div>
           </div>
         </div>
@@ -417,7 +418,6 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
               <div className="pay-spin-zone">
                 <div className="pay-spinner" />
                 <p className="pay-spin-text">{arcStatusText()}</p>
-                {/* Progress indicator */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginTop: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <div style={{ width: 8, height: 8, borderRadius: "50%", background: txHash ? "var(--c)" : "var(--stroke2)" }} />
@@ -443,10 +443,10 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
                   disabled={!hasEnough || !paymentTarget}
                   style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}
                 >
-                  Pay {formatUSDC(link.amount)} USDC
+                  Pay {totalPays} USDC
                 </button>
                 <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
-                  2 confirmations — payment + fee
+                  2 confirmations — {link.amount} USDC payment + {feeAmount} USDC fee
                 </p>
                 {balance && (
                   <p className={`pay-bal${!hasEnough ? " low" : ""}`}>
