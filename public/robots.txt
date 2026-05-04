@@ -1,7 +1,6 @@
 User-agent: *
 Allow: /
 Allow: /pay/
-Allow: /u/
 
 Disallow: /api/
 Disallow: /admin/
