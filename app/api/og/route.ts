@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
     const data = await res.json();
     const links: any[] = data.links ?? [];
     const done = links.filter((l: any) => l.status === "COMPLETED");
-
     totalLinks = links.length;
     completed = done.length;
     totalEarned = done.reduce((s: number, l: any) => s + parseFloat(l.amount), 0);
@@ -35,11 +34,30 @@ export async function GET(req: NextRequest) {
     // use defaults
   }
 
+  // Fetch images as ArrayBuffer — required by @vercel/og
+  let logoData: ArrayBuffer | null = null;
+  let iconData: ArrayBuffer | null = null;
+
+  try {
+    const [logoRes, iconRes] = await Promise.all([
+      fetch(`${origin}/conduit-logo-white.png`),
+      fetch(`${origin}/favicon.png`),
+    ]);
+    logoData = await logoRes.arrayBuffer();
+    iconData = await iconRes.arrayBuffer();
+  } catch {
+    // images failed to load — card will render without them
+  }
+
   const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   return new ImageResponse(
-    PnlCardImage({ totalEarned, completed, completionRate, avgPayment, biggestPayment, shortAddr, today }),
+    PnlCardImage({
+      totalEarned, completed, completionRate,
+      avgPayment, biggestPayment, shortAddr, today,
+      logoData, iconData,
+    }),
     { width: 800, height: 420 }
   );
 }

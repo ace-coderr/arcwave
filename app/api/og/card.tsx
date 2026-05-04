@@ -1,50 +1,55 @@
 export function PnlCardImage({
-  totalEarned, completed, completionRate, avgPayment, biggestPayment, shortAddr, today
+  totalEarned, completed, completionRate, avgPayment, biggestPayment,
+  shortAddr, today, logoData, iconData,
 }: {
-  totalEarned: number; completed: number; completionRate: number;
-  avgPayment: number; biggestPayment: number; shortAddr: string; today: string;
+  totalEarned: number;
+  completed: number;
+  completionRate: number;
+  avgPayment: number;
+  biggestPayment: number;
+  shortAddr: string;
+  today: string;
+  logoData: ArrayBuffer | null;
+  iconData: ArrayBuffer | null;
 }) {
   const fmt = (n: number) => n.toFixed(2);
 
   return (
     <div style={{ width: 800, height: 420, background: "#08090e", display: "flex", flexDirection: "column", fontFamily: "monospace", overflow: "hidden", position: "relative" }}>
 
-      {/* ── Large centered icon as background stamp ── */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="https://conduit-pay.vercel.app/favicon.png"
-        alt=""
-        width={340}
-        height={340}
-        style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          opacity: 0.06,
-          objectFit: "contain",
-          pointerEvents: "none",
-        }}
-      />
+      {/* Large centered icon watermark */}
+      {iconData && (
+        <img
+          src={iconData as any}
+          alt=""
+          width={340}
+          height={340}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            opacity: 0.07,
+            objectFit: "contain",
+          }}
+        />
+      )}
 
-      {/* Green glow behind icon */}
-      <div style={{ position: "absolute", top: "50%", left: "50%", width: 400, height: 400, background: "radial-gradient(ellipse, rgba(0,229,160,0.07) 0%, transparent 70%)", display: "flex", transform: "translate(-50%, -50%)" }} />
+      {/* Glow */}
+      <div style={{ position: "absolute", top: "50%", left: "50%", width: 420, height: 420, background: "radial-gradient(ellipse, rgba(0,229,160,0.07) 0%, transparent 70%)", display: "flex", transform: "translate(-50%, -50%)" }} />
 
       {/* Top bar */}
       <div style={{ width: "100%", height: 3, background: "#00E5A0", display: "flex", flexShrink: 0 }} />
 
       <div style={{ flex: 1, padding: "28px 44px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative" }}>
 
-        {/* Header — logo left, network + date right */}
+        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="https://conduit-pay.vercel.app/conduit-logo-white.png"
-            alt="Conduit"
-            width={120}
-            height={36}
-            style={{ objectFit: "contain" }}
-          />
+          {logoData ? (
+            <img src={logoData as any} alt="Conduit" width={120} height={36} style={{ objectFit: "contain" }} />
+          ) : (
+            <span style={{ fontSize: 15, color: "#f8fafc", fontWeight: 800, letterSpacing: "0.1em" }}>CONDUIT</span>
+          )}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(0,229,160,0.1)", border: "1px solid rgba(0,229,160,0.22)", borderRadius: 20, padding: "4px 12px" }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#00E5A0", display: "flex" }} />
