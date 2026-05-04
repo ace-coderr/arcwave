@@ -146,7 +146,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       isStealthLink,
     },
     verified: verificationPassed,
-    requiresForward: isStealthLink && !isUnified,
+    requiresForward: isStealthLink,
     message: isUnified
       ? "Payment received via Unified Balance."
       : isStealthLink
