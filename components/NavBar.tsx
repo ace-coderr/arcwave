@@ -73,7 +73,7 @@ export function NavBar() {
               alt="Conduit"
               width={140}
               height={52}
-              style={{ height: 40, width: "auto", objectFit: "contain" }}
+              style={{ height: 52, width: "auto", objectFit: "contain" }}
               priority
             />
           ) : (
@@ -82,7 +82,7 @@ export function NavBar() {
               alt="Conduit"
               width={140}
               height={52}
-              style={{ height: 40, width: "auto", objectFit: "contain" }}
+              style={{ height: 52, width: "auto", objectFit: "contain" }}
               priority
             />
           )}
@@ -93,11 +93,13 @@ export function NavBar() {
           {LINKS.map((l) => (
             <Link
               key={l.href}
-              href={l.href}
+              href={l.soon ? "#" : l.href}
               className={`nav-link${pathname === l.href ? " active" : ""}`}
+              style={l.soon ? { pointerEvents: "none", opacity: 0.4 } : {}}
             >
               <span className="nav-link-icon">{l.icon}</span>
               {l.label}
+              {l.soon && <span className="nav-soon">SOON</span>}
             </Link>
           ))}
         </div>
@@ -144,11 +146,13 @@ export function NavBar() {
         {LINKS.map((l) => (
           <Link
             key={l.href}
-            href={l.href}
+            href={l.soon ? "#" : l.href}
             className={`nav-link${pathname === l.href ? " active" : ""}`}
+            style={l.soon ? { pointerEvents: "none", opacity: 0.4 } : {}}
           >
             <span className="nav-link-icon">{l.icon}</span>
             {l.label}
+            {l.soon && <span className="nav-soon">SOON</span>}
           </Link>
         ))}
         <div style={{ height: 1, background: "var(--stroke)", margin: "8px 0" }} />
