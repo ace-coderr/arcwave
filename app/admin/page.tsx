@@ -151,7 +151,7 @@ export default function AdminPage() {
   if (!isConnected) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, marginBottom: 40 }}/>
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, marginBottom: 40 }}/>
         <div style={{ background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
           <div style={{ height: 2, background: "var(--c)", position: "absolute", top: 0, left: 0, right: 0 }}/>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--c-dim)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
@@ -174,7 +174,7 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, marginBottom: 40 }}/>
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, marginBottom: 40 }}/>
         <div style={{ background: "var(--surface)", border: "1px solid rgba(240,62,95,.2)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
           <div style={{ height: 2, background: "var(--danger)", position: "absolute", top: 0, left: 0, right: 0 }}/>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
@@ -200,7 +200,7 @@ export default function AdminPage() {
       {/* Top bar */}
       <div style={{ height: 56, background: "var(--surface)", borderBottom: "1px solid var(--stroke)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 32, width: "auto" }}/>
+          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, width: "auto" }}/>
           <div style={{ width: 1, height: 20, background: "var(--stroke)" }}/>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", borderRadius: 20, padding: "3px 12px" }}>
             <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }}/>

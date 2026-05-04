@@ -129,7 +129,21 @@ export function NavBar() {
           )}
 
           <button className="nav-theme-btn" onClick={toggleTheme} title={isDark ? "Switch to light" : "Switch to dark"}>
-            {mounted ? (isDark ? "☀️" : "🌙") : "☀️"}
+            {mounted ? (isDark ? (
+              <svg viewBox="0 0 20 20" fill="none" width="15" height="15">
+                <circle cx="10" cy="10" r="4" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 20 20" fill="none" width="15" height="15">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )) : (
+              <svg viewBox="0 0 20 20" fill="none" width="15" height="15">
+                <circle cx="10" cy="10" r="4" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            )}
           </button>
 
           <button className="nav-hamburger" onClick={() => setDrawerOpen(!drawerOpen)}>
