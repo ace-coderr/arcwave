@@ -72,8 +72,8 @@ export function NavBar() {
               src={logoSrc}
               alt="Conduit"
               width={140}
-              height={52}
-              style={{ height: 52, width: "auto", objectFit: "contain" }}
+              height={80}
+              style={{ height: 80, width: "auto", objectFit: "contain" }}
               priority
             />
           ) : (
@@ -81,8 +81,8 @@ export function NavBar() {
               src="/conduit-logo-white.png"
               alt="Conduit"
               width={140}
-              height={52}
-              style={{ height: 52, width: "auto", objectFit: "contain" }}
+              height={80}
+              style={{ height: 80, width: "auto", objectFit: "contain" }}
               priority
             />
           )}

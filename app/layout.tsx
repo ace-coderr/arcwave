@@ -5,19 +5,44 @@ import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Conduit - The Payment Channel for Web3",
-  description: "Create shareable USDC payment links. Pay from any chain. Privacy-protected. Instant settlement on Arc Network.",
+  title: "Conduit — USDC Payment Links on Arc Network",
+  description: "Create shareable USDC payment links in seconds. Get paid from any chain — Base, Ethereum, Arbitrum and more. Privacy-first with stealth mode. Instant settlement on Arc Network.",
+  keywords: ["USDC", "payment links", "Web3 payments", "Arc Network", "crypto payments", "stealth payments", "Circle"],
+  authors: [{ name: "Conduit" }],
+  creator: "Conduit",
+  metadataBase: new URL("https://conduit-pay.vercel.app"),
   icons: {
     icon: "/favicon.png",
     apple: "/favicon.png",
     shortcut: "/favicon.png",
   },
   openGraph: {
-    title: "Conduit - The Payment Channel for Web3",
-    description: "Create a payment link, share it, get paid in USDC from any chain.",
+    title: "Conduit — USDC Payment Links on Arc Network",
+    description: "Create a payment link, share it, get paid in USDC from any chain. No sign-up. No KYC. Instant.",
     siteName: "Conduit",
+    url: "https://conduit-pay.vercel.app",
     type: "website",
-    images: [{ url: "/conduit-logo-black.png" }],
+    images: [{
+      url: "/conduit-logo-white.png",
+      width: 800,
+      height: 400,
+      alt: "Conduit — USDC Payment Links",
+    }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Conduit — USDC Payment Links on Arc Network",
+    description: "Create a payment link, share it, get paid in USDC from any chain. No sign-up. No KYC. Instant.",
+    images: ["/conduit-logo-white.png"],
+    creator: "@conduit_pay",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+    },
   },
 };
 
