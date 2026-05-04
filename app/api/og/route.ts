@@ -37,14 +37,16 @@ export async function GET(req: NextRequest) {
   // Fetch images as ArrayBuffer — required by @vercel/og
   let logoData: ArrayBuffer | null = null;
   let iconData: ArrayBuffer | null = null;
-
+  let bannerData: ArrayBuffer | null = null;
   try {
-    const [logoRes, iconRes] = await Promise.all([
+    const [logoRes, iconRes, bannerRes] = await Promise.all([
       fetch(`${origin}/conduit-logo-white.png`),
+      fetch(`${origin}/favicon.png`),
       fetch(`${origin}/pnl-banner.jpeg`),
     ]);
     logoData = await logoRes.arrayBuffer();
     iconData = await iconRes.arrayBuffer();
+    bannerData = await bannerRes.arrayBuffer();
   } catch {
     // images failed to load — card will render without them
   }
@@ -56,7 +58,7 @@ export async function GET(req: NextRequest) {
     PnlCardImage({
       totalEarned, completed, completionRate,
       avgPayment, biggestPayment, shortAddr, today,
-      logoData, iconData,
+      logoData, iconData, bannerData,
     }),
     { width: 800, height: 420 }
   );

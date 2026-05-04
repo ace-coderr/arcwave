@@ -1,6 +1,6 @@
 export function PnlCardImage({
   totalEarned, completed, completionRate, avgPayment, biggestPayment,
-  shortAddr, today, logoData, iconData,
+  shortAddr, today, logoData, iconData, bannerData,
 }: {
   totalEarned: number;
   completed: number;
@@ -11,6 +11,7 @@ export function PnlCardImage({
   today: string;
   logoData: ArrayBuffer | null;
   iconData: ArrayBuffer | null;
+  bannerData: ArrayBuffer | null;
 }) {
   const fmt = (n: number) => n.toFixed(2);
 
@@ -31,6 +32,24 @@ export function PnlCardImage({
             transform: "translate(-50%, -50%)",
             opacity: 0.07,
             objectFit: "contain",
+          }}
+        />
+      )}
+
+      {bannerData && (
+        <img
+          src={bannerData as any}
+          alt=""
+          width={800}
+          height={420}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.15,
           }}
         />
       )}

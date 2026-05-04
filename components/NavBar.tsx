@@ -72,7 +72,7 @@ export function NavBar() {
               src={logoSrc}
               alt="Conduit"
               width={110}
-              height={40}
+              height={80}
               style={{ height: 40, width: "auto", objectFit: "contain" }}
               priority
             />
