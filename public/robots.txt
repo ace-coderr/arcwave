@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Allow: /pay/
+Allow: /u/
+
+Disallow: /api/
+Disallow: /admin/
+Disallow: /analytics/
+
+Sitemap: https://conduit-pay.vercel.app/sitemap.xml
