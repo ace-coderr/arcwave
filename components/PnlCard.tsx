@@ -77,7 +77,7 @@ export function PnlCard({
             position: "absolute",
             top: "50%", left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 200, height: 200,
+            width: 400, height: 400,
             objectFit: "contain",
             opacity: 0.07,
             pointerEvents: "none",
