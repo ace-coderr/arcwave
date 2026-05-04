@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   try {
     const [logoRes, iconRes] = await Promise.all([
       fetch(`${origin}/conduit-logo-white.png`),
-      fetch(`${origin}/favicon.png`),
+      fetch(`${origin}/pnl-banner.jpeg`),
     ]);
     logoData = await logoRes.arrayBuffer();
     iconData = await iconRes.arrayBuffer();
