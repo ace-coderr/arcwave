@@ -34,22 +34,25 @@ export async function GET(req: NextRequest) {
     // use defaults
   }
 
-  // Fetch images as ArrayBuffer — required by @vercel/og
+  // Fetch each image separately so one failure doesn't break the rest
   let logoData: ArrayBuffer | null = null;
   let iconData: ArrayBuffer | null = null;
   let bannerData: ArrayBuffer | null = null;
+
   try {
-    const [logoRes, iconRes, bannerRes] = await Promise.all([
-      fetch(`${origin}/conduit-logo-white.png`),
-      fetch(`${origin}/favicon.png`),
-      fetch(`${origin}/pnl-banner.jpeg`),
-    ]);
-    logoData = await logoRes.arrayBuffer();
-    iconData = await iconRes.arrayBuffer();
-    bannerData = await bannerRes.arrayBuffer();
-  } catch {
-    // images failed to load — card will render without them
-  }
+    const r = await fetch(`${origin}/conduit-logo-white.png`);
+    if (r.ok) logoData = await r.arrayBuffer();
+  } catch { }
+
+  try {
+    const r = await fetch(`${origin}/favicon.png`);
+    if (r.ok) iconData = await r.arrayBuffer();
+  } catch { }
+
+  try {
+    const r = await fetch(`${origin}/pnl-banner.jpeg`);
+    if (r.ok) bannerData = await r.arrayBuffer();
+  } catch { }
 
   const shortAddr = `${address.slice(0, 6)}...${address.slice(-4)}`;
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
