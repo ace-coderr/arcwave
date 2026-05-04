@@ -33,79 +33,77 @@ export default function HomePage() {
     if (isConnected && address) fetchStats();
   }, [isConnected, address, fetchStats, refreshTrigger]);
 
+  const TRUST_ITEMS = [
+    {
+      label: "One-time use",
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M7 1l1.8 3.6L13 5.45l-3 2.92.7 4.13L7 10.6l-3.7 1.9.7-4.13L1 5.45l4.2-.85L7 1z" stroke="var(--c)" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+    },
+    {
+      label: "Stealth privacy",
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+    },
+    {
+      label: "Multi-chain",
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="7" cy="7" r="5.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M1.5 7h11M7 1.5c-1.5 1.5-1.5 9 0 11M7 1.5c1.5 1.5 1.5 9 0 11" stroke="var(--c)" strokeWidth="1.2"/></svg>
+    },
+    {
+      label: "No KYC",
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M2 7l3.5 3.5L12 3" stroke="var(--c)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    },
+  ];
+
   return (
     <div className="app">
       <NavBar />
 
       <div className="app-body">
+        {!mounted && <div className="loading-wrap"><div className="page-spinner"/></div>}
 
-        {/* Loading */}
-        {!mounted && (
-          <div className="loading-wrap">
-            <div className="page-spinner" />
-          </div>
-        )}
-
-        {/* ── Landing (not connected) ────────────────────────── */}
+        {/* Landing */}
         {mounted && !isConnected && (
           <>
             <div className="landing fade-in">
               <div className="landing-inner">
-
-                {/* Left: hero text */}
                 <div>
                   <div className="hero-eyebrow">
-                    <span className="hero-eyebrow-dot pulse-dot" />
+                    <span className="hero-eyebrow-dot pulse-dot"/>
                     <span className="hero-eyebrow-text">LIVE ON ARC TESTNET</span>
                   </div>
 
                   <h1 className="hero-title">
-                    Send USDC.<br />
-                    <em>No friction.</em><br />
+                    Send USDC.<br/>
+                    <em>No friction.</em><br/>
                     Any chain.
                   </h1>
 
                   <p className="hero-desc">
                     Conduit turns your wallet into a payment page.
-                    Create a link, share it, and receive USDC from anyone -
+                    Create a link, share it, and receive USDC from anyone —
                     no accounts, no KYC, no waiting.
                   </p>
 
                   <div className="hero-cta">
-                    <button
-                      className="btn-hero"
-                      onClick={() => connect({ connector: injected() })}
-                    >
+                    <button className="btn-hero" onClick={() => connect({ connector: injected() })}>
                       Get Started — It's Free
                     </button>
-                    <a
-                      href="https://faucet.circle.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-hero-ghost"
-                    >
+                    <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="btn-hero-ghost">
                       Get Testnet USDC →
                     </a>
                   </div>
 
                   <div className="trust-row">
-                    {[
-                      "One-time use",
-                      "Stealth privacy",
-                      "Multi-chain",
-                      "No KYC",
-                    ].map((t) => (
-                      <div key={t} className="trust-item">
-                        <span className="trust-icon">✓</span>
-                        {t}
+                    {TRUST_ITEMS.map((t) => (
+                      <div key={t.label} className="trust-item">
+                        {t.icon}
+                        {t.label}
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Right: demo pay card */}
+                {/* Hero card */}
                 <div className="hero-card fade-up" style={{ animationDelay: ".1s" }}>
-                  <div className="hero-card-bar" />
+                  <div className="hero-card-bar"/>
                   <div className="hero-card-head">
                     <div className="hero-card-label">PAYMENT REQUEST</div>
                     <div>
@@ -114,7 +112,6 @@ export default function HomePage() {
                     </div>
                     <div className="hero-card-title">Freelance Design Invoice</div>
                   </div>
-
                   <div className="hero-card-body">
                     <div className="hero-detail-row">
                       <span className="hero-detail-key">Pay to</span>
@@ -123,24 +120,26 @@ export default function HomePage() {
                     <div className="hero-detail-row">
                       <span className="hero-detail-key">Network</span>
                       <span className="hero-detail-val">
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--c)", display: "inline-block" }} />
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--c)", display: "inline-block" }}/>
                         Arc Testnet
                       </span>
                     </div>
                     <div className="hero-detail-row">
                       <span className="hero-detail-key">Privacy</span>
-                      <span className="hero-detail-val" style={{ color: "var(--c)", fontSize: 11 }}>🔒 Stealth mode</span>
+                      <span className="hero-detail-val" style={{ color: "var(--c)", fontSize: 11, display: "flex", alignItems: "center", gap: 5 }}>
+                        <svg viewBox="0 0 14 14" fill="none" width="11" height="11"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                        Stealth mode
+                      </span>
                     </div>
                     <div className="hero-detail-row" style={{ marginTop: 4 }}>
                       <span className="hero-detail-key">Type</span>
                       <span className="hero-detail-val" style={{ color: "var(--warning)", fontSize: 11 }}>One-time use</span>
                     </div>
                   </div>
-
                   <div className="hero-card-foot">
                     <button className="btn-pay-demo">Pay 50.00 USDC</button>
                     <div className="demo-net">
-                      <span className="demo-dot pulse-dot" />
+                      <span className="demo-dot pulse-dot"/>
                       <span className="demo-text">Arc Testnet · Chain 5042002</span>
                     </div>
                   </div>
@@ -169,7 +168,7 @@ export default function HomePage() {
                 <div className="features">
                   {["One-time use links", "Stealth mode privacy", "Multi-chain payments", "No sign-up required", "Sub-second settlement", "Open source", "Arc Network native"].map((f) => (
                     <div key={f} className="feat">
-                      <span className="feat-dot" />{f}
+                      <span className="feat-dot"/>{f}
                     </div>
                   ))}
                 </div>
@@ -178,7 +177,7 @@ export default function HomePage() {
           </>
         )}
 
-        {/* ── Connected dashboard ────────────────────────────── */}
+        {/* Dashboard */}
         {mounted && isConnected && (
           <div className="page-wrap fade-in">
             <div className="page-header">
@@ -186,11 +185,7 @@ export default function HomePage() {
               <p className="page-subtitle">Manage your USDC payment links · Powered by Circle & Arc Network</p>
             </div>
 
-            <StatsRow
-              totalLinks={stats.totalLinks}
-              completedLinks={stats.completedLinks}
-              totalEarned={stats.totalEarned}
-            />
+            <StatsRow totalLinks={stats.totalLinks} completedLinks={stats.completedLinks} totalEarned={stats.totalEarned} />
 
             <div className="dashboard-grid">
               <div className="dashboard-left">
@@ -198,7 +193,7 @@ export default function HomePage() {
                 <div className="quick-actions-grid">
                   <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="quick-action-card">
                     <div className="quick-action-icon">
-                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="6" stroke="var(--c)" strokeWidth="1.4"/><path d="M8 5v3l2 1.5" stroke="var(--c)" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="6" stroke="var(--c)" strokeWidth="1.4"/><path d="M8 5v6M5.5 7.5C5.5 6.12 6.62 5 8 5s2.5 1.12 2.5 2.5S9.38 10 8 10s-2.5 1.12-2.5 2.5S6.62 15 8 15" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
                     </div>
                     <div>
                       <div className="quick-action-label">Get USDC</div>
@@ -207,7 +202,7 @@ export default function HomePage() {
                   </a>
                   <a href="https://testnet.arcscan.app" target="_blank" rel="noopener noreferrer" className="quick-action-card">
                     <div className="quick-action-icon">
-                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="6" stroke="var(--ink-3)" strokeWidth="1.4"/><path d="M5 8h6M8 5v6" stroke="var(--ink-3)" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M11 3l2 2-7 7-3-3 1.5-1.5 1.5 1.5L11 3z" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M2 14h12" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinecap="round"/></svg>
                     </div>
                     <div>
                       <div className="quick-action-label">Explorer</div>

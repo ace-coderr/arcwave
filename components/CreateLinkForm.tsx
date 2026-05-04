@@ -31,13 +31,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
       const res = await fetch("/api/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          amount: parsed.toString(),
-          description: description.trim() || undefined,
-          recipientAddress: address,
-          stealthMode, // pass stealth preference to API
-        }),
+        body: JSON.stringify({ title: title.trim(), amount: parsed.toString(), description: description.trim() || undefined, recipientAddress: address, stealthMode }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { link } = await res.json();
@@ -97,44 +91,24 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
           </div>
         ) : (
           <form onSubmit={handleSubmit}>
-            {/* Title */}
             <div className="form-group">
               <label className="form-label">Title</label>
-              <input
-                type="text" className="input"
-                placeholder="e.g. Freelance Invoice #102"
-                value={title} onChange={e => setTitle(e.target.value)}
-                maxLength={80} required disabled={!isConnected}
-              />
+              <input type="text" className="input" placeholder="e.g. Freelance Invoice #102" value={title} onChange={e => setTitle(e.target.value)} maxLength={80} required disabled={!isConnected} />
             </div>
 
-            {/* Amount */}
             <div className="form-group">
               <label className="form-label">Amount</label>
               <div className="form-input-wrap">
-                <input
-                  type="number" className="input mono"
-                  placeholder="0.00" value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  min="0.000001" step="any" required
-                  disabled={!isConnected}
-                  style={{ paddingRight: 52 }}
-                />
+                <input type="number" className="input mono" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} min="0.000001" step="any" required disabled={!isConnected} style={{ paddingRight: 52 }} />
                 <span className="form-input-suffix">USDC</span>
               </div>
             </div>
 
-            {/* Description */}
             <div className="form-group">
               <label className="form-label">
                 Description <span className="form-label-optional">(optional)</span>
               </label>
-              <input
-                type="text" className="input"
-                placeholder="e.g. Logo design for Acme Corp"
-                value={description} onChange={e => setDescription(e.target.value)}
-                maxLength={200} disabled={!isConnected}
-              />
+              <input type="text" className="input" placeholder="e.g. Logo design for Acme Corp" value={description} onChange={e => setDescription(e.target.value)} maxLength={200} disabled={!isConnected} />
             </div>
 
             {/* Stealth Mode Toggle */}
@@ -142,7 +116,8 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
               <div className="stealth-toggle-info">
                 <div className="stealth-toggle-label">
                   <svg viewBox="0 0 16 16" fill="none" width="13" height="13" style={{ flexShrink: 0 }}>
-                    <path d="M8 1C4.13 1 1 4.13 1 8s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 11c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm1-4H7V4h2v4z" fill="currentColor"/>
+                    <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                    <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
                   </svg>
                   Stealth Mode
                 </div>
@@ -152,45 +127,41 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
                     : "Payment goes directly to your wallet — address visible on-chain"}
                 </div>
               </div>
-
-              {/* Toggle switch */}
-              <button
-                type="button"
-                onClick={() => setStealthMode(!stealthMode)}
-                disabled={!isConnected}
-                className={`toggle-switch${stealthMode ? " on" : ""}`}
-                aria-label="Toggle stealth mode"
-              >
+              <button type="button" onClick={() => setStealthMode(!stealthMode)} disabled={!isConnected} className={`toggle-switch${stealthMode ? " on" : ""}`} aria-label="Toggle stealth mode">
                 <span className="toggle-knob"/>
               </button>
             </div>
 
-            {/* Stealth mode info box */}
             {stealthMode && (
               <div className="stealth-info-box animate-fade-up">
-                <span style={{ fontSize: 13, flexShrink: 0 }}>🔒</span>
+                <svg viewBox="0 0 16 16" fill="none" width="14" height="14" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="#a78bfa" strokeWidth="1.3"/>
+                  <path d="M5 7V5a3 3 0 016 0v2" stroke="#a78bfa" strokeWidth="1.3" strokeLinecap="round"/>
+                </svg>
                 <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
-                  A fresh temp wallet will receive the payment and auto-forward to your real address.
-                  Payer cannot track you on ArcScan.
+                  A fresh temp wallet will receive the payment and auto-forward to your real address. Payer cannot track you on ArcScan.
                 </p>
               </div>
             )}
 
             {error && <div className="form-error">{error}</div>}
 
-            <button
-              type="submit"
-              className="form-submit-btn"
-              disabled={isLoading || !isConnected}
-            >
+            <button type="submit" className="form-submit-btn" disabled={isLoading || !isConnected}>
               {isLoading ? (
                 <span className="form-submit-spinner">
                   <span className="spinner"/>
                   {stealthMode ? "Generating stealth link..." : "Generating..."}
                 </span>
               ) : !isConnected ? "Connect Wallet First"
-                : stealthMode ? "Generate Private Link 🔒"
-                : "Generate Payment Link"}
+                : stealthMode ? (
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                    <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+                      <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+                      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    </svg>
+                    Generate Private Link
+                  </span>
+                ) : "Generate Payment Link"}
             </button>
           </form>
         )}
