@@ -3,7 +3,6 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { createWalletClient, createPublicClient, http, formatEther, parseEther } from "viem";
 import { arcTestnet } from "./arcChain";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
-import { FEE_CONFIG, calculateFee } from "./fees";
 
 const ALGORITHM = "aes-256-gcm";
 
@@ -99,7 +98,7 @@ export async function forwardFunds(
       return { success: false, error: "Stealth wallet balance is 0 — payment not yet confirmed." };
     }
 
-    // Fund stealth wallet with gas
+    // Fund stealth wallet with gas from forwarder
     const gasPrice = await publicClient.getGasPrice();
     const gasLimit = BigInt(21000);
     const gasFunding = gasPrice * gasLimit * BigInt(5);
@@ -109,39 +108,12 @@ export async function forwardFunds(
       value: gasFunding,
     });
     await publicClient.waitForTransactionReceipt({ hash: fundTxHash, timeout: 20_000 });
+    console.log(`[forward] Gas funded: ${fundTxHash}`);
 
-    // Get updated balance
-    const balanceAfterFunding = await publicClient.getBalance({ address: stealthAccount.address });
-    const gasCostBuffer = gasPrice * gasLimit * BigInt(3);
+    // ✅ Forward FULL amount to recipient
+    // Fee is already collected client-side separately — do NOT deduct here
+    const recipientWei = parseEther(paymentAmount);
 
-    // Calculate fee split
-    const { fee, recipientAmount } = calculateFee(paymentAmount);
-    const feeWei = parseEther(fee);
-    const recipientWei = parseEther(recipientAmount);
-
-    console.log(`[forward] Fee (${FEE_CONFIG.percentage}%): ${fee} USDC → ${FEE_CONFIG.collectorAddress}`);
-    console.log(`[forward] Recipient gets: ${recipientAmount} USDC`);
-
-    // Send fee to collector (skip if collector is same as recipient)
-    if (
-      feeWei > BigInt(0) &&
-      FEE_CONFIG.collectorAddress.toLowerCase() !== recipientAddress.toLowerCase()
-    ) {
-      try {
-        const feeTxHash = await stealthClient.sendTransaction({
-          to: FEE_CONFIG.collectorAddress as `0x${string}`,
-          value: feeWei,
-          gas: gasLimit,
-          gasPrice,
-        });
-        await publicClient.waitForTransactionReceipt({ hash: feeTxHash, timeout: 20_000 });
-        console.log(`[forward] Fee sent: ${feeTxHash}`);
-      } catch (feeErr: any) {
-        console.warn(`[forward] Fee transfer failed (continuing): ${feeErr.message}`);
-      }
-    }
-
-    // Send recipient amount
     const forwardTxHash = await stealthClient.sendTransaction({
       to: recipientAddress as `0x${string}`,
       value: recipientWei,
@@ -150,7 +122,7 @@ export async function forwardFunds(
     });
 
     await publicClient.waitForTransactionReceipt({ hash: forwardTxHash, timeout: 20_000 });
-    console.log(`[forward] Forwarded to recipient: ${forwardTxHash}`);
+    console.log(`[forward] Forwarded full amount to recipient: ${forwardTxHash}`);
 
     return { success: true, txHash: forwardTxHash };
   } catch (err: any) {
