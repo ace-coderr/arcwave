@@ -47,38 +47,37 @@ function maskAddress(address: string): string {
   return `${address.slice(0, 6)}••••••••••••${address.slice(-4)}`;
 }
 
-// ── SVG Icons ──────────────────────────────────────────────────
 const IconLock = ({ size = 14, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 16 16" fill="none" width={size} height={size}>
-    <rect x="3" y="7" width="10" height="8" rx="1.5" stroke={color} strokeWidth="1.3"/>
-    <path d="M5 7V5a3 3 0 016 0v2" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+    <rect x="3" y="7" width="10" height="8" rx="1.5" stroke={color} strokeWidth="1.3" />
+    <path d="M5 7V5a3 3 0 016 0v2" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 );
 
 const IconBolt = ({ size = 14, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 16 16" fill="none" width={size} height={size}>
-    <path d="M9 2L4 9h4l-1 5 5-7H8l1-5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M9 2L4 9h4l-1 5 5-7H8l1-5z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
   </svg>
 );
 
 const IconGlobe = ({ size = 14, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 16 16" fill="none" width={size} height={size}>
-    <circle cx="8" cy="8" r="6" stroke={color} strokeWidth="1.3"/>
-    <path d="M2 8h12M8 2c-2 2-2 8 0 12M8 2c2 2 2 8 0 12" stroke={color} strokeWidth="1.3"/>
+    <circle cx="8" cy="8" r="6" stroke={color} strokeWidth="1.3" />
+    <path d="M2 8h12M8 2c-2 2-2 8 0 12M8 2c2 2 2 8 0 12" stroke={color} strokeWidth="1.3" />
   </svg>
 );
 
 const IconWarning = ({ size = 14, color = "currentColor" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 16 16" fill="none" width={size} height={size}>
-    <path d="M8 2L1.5 13.5h13L8 2z" stroke={color} strokeWidth="1.3" strokeLinejoin="round"/>
-    <path d="M8 6v3M8 11v.5" stroke={color} strokeWidth="1.3" strokeLinecap="round"/>
+    <path d="M8 2L1.5 13.5h13L8 2z" stroke={color} strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M8 6v3M8 11v.5" stroke={color} strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 );
 
 const IconX = ({ size = 36, color = "var(--danger)" }: { size?: number; color?: string }) => (
   <svg viewBox="0 0 36 36" fill="none" width={size} height={size}>
-    <circle cx="18" cy="18" r="16" stroke={color} strokeWidth="1.5"/>
-    <path d="M12 12l12 12M24 12L12 24" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="18" cy="18" r="16" stroke={color} strokeWidth="1.5" />
+    <path d="M12 12l12 12M24 12L12 24" stroke={color} strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
 
@@ -91,7 +90,7 @@ function Logo() {
 }
 
 type PayMode = "arc" | "unified";
-type UnifiedStep = "idle" | "depositing" | "spending" | "recording" | "done" | "failed";
+type UnifiedStep = "idle" | "depositing" | "spending" | "recording" | "switching" | "sending_fee" | "done" | "failed";
 type ArcStep = "idle" | "sending_payment" | "sending_fee" | "recording" | "done" | "failed";
 
 export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
@@ -130,6 +129,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Arc: after payment confirms → send fee
   useEffect(() => {
     if (paymentConfirmed && txHash && arcStep === "sending_payment") {
       setArcStep("sending_fee");
@@ -137,18 +137,45 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
         { to: FEE_COLLECTOR as `0x${string}`, value: parseEther(feeAmount), chainId: arcTestnet.id },
         {
           onSuccess: (hash) => { setFeeTxHash(hash); },
-          onError: (err: Error) => { console.warn("[fee] Fee tx failed:", err.message); if (address && txHash) recordPayment(txHash, address); },
+          onError: (err: Error) => {
+            console.warn("[fee] Fee tx failed:", err.message);
+            if (address && txHash) recordPayment(txHash, address);
+          },
         }
       );
     }
   }, [paymentConfirmed]);
 
+  // Arc: after fee confirms → record
   useEffect(() => {
     if (feeConfirmed && feeTxHash && arcStep === "sending_fee") {
       setArcStep("recording");
       if (address && txHash) recordPayment(txHash, address);
     }
   }, [feeConfirmed]);
+
+  // Unified: after switching to Arc → send fee
+  useEffect(() => {
+    if (unifiedStep === "switching" && isOnArc && address) {
+      setUnifiedStep("sending_fee");
+      sendFee(
+        { to: FEE_COLLECTOR as `0x${string}`, value: parseEther(feeAmount), chainId: arcTestnet.id },
+        {
+          onSuccess: (hash) => {
+            setFeeTxHash(hash);
+            setUnifiedStep("done");
+            setPaySuccess(true);
+          },
+          onError: (err: Error) => {
+            console.warn("[unified fee] Fee tx failed:", err.message);
+            // Fee failed — payment already recorded, still show success
+            setUnifiedStep("done");
+            setPaySuccess(true);
+          },
+        }
+      );
+    }
+  }, [unifiedStep, isOnArc]);
 
   const recordPayment = async (hash: string, payer: string, type: "arc" | "unified" = "arc") => {
     setIsMarkingPaid(true);
@@ -218,14 +245,22 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       const adapter = await createBrowserAdapter();
       const recipientAddr = link.recipientAddress || link.stealthAddress;
       if (!recipientAddr) throw new Error("Recipient address not available.");
+
       const depositResult = await kit.unifiedBalance.deposit({ from: { adapter, chain: selectedChain as any }, amount: link.amount, token: "USDC" });
       setUnifiedTxHash(extractHash(depositResult));
       setUnifiedStep("spending");
+
       const spendResult = await kit.unifiedBalance.spend({ from: { adapter }, amount: link.amount, to: { adapter, chain: "Arc_Testnet", recipientAddress: recipientAddr } });
       setUnifiedStep("recording");
+
       const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
       if (address) await recordPayment(finalHash, address, "unified");
-      setUnifiedStep("done");
+
+      // Switch to Arc to send fee
+      setUnifiedStep("switching");
+      switchChain({ chainId: arcTestnet.id });
+      // useEffect watches isOnArc + unifiedStep === "switching" to trigger fee send
+
     } catch (err: any) {
       setUnifiedError(err.message ?? "Cross-chain payment failed.");
       setUnifiedStep("failed");
@@ -246,6 +281,16 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     return "Processing...";
   };
 
+  const unifiedStatusText = () => {
+    if (unifiedStep === "depositing") return "Step 1/3 — Depositing from " + (chainInfo?.name ?? "source chain") + "...";
+    if (unifiedStep === "spending") return "Step 2/3 — Routing to Arc Network...";
+    if (unifiedStep === "recording") return "Recording payment...";
+    if (unifiedStep === "switching") return "Switching to Arc for fee...";
+    if (unifiedStep === "sending_fee") return "Step 3/3 — Confirm fee in MetaMask...";
+    return "Processing...";
+  };
+
+  // ── Completed ──────────────────────────────────────────────────
   if (link.status === "COMPLETED" && !paySuccess) {
     return (
       <div className="pay-page">
@@ -266,15 +311,14 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     );
   }
 
+  // ── Expired ────────────────────────────────────────────────────
   if (link.status === "EXPIRED") {
     return (
       <div className="pay-page">
         <Logo /><p className="pay-tagline">PAYMENT REQUEST</p>
         <div className="pay-card"><div className="pay-card-bar" />
           <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-              <IconX size={52} />
-            </div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><IconX size={52} /></div>
             <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Link Cancelled</p>
             <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This link has been cancelled.</p>
           </div>
@@ -284,6 +328,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     );
   }
 
+  // ── Success ────────────────────────────────────────────────────
   if (paySuccess) {
     return (
       <div className="pay-page">
@@ -311,6 +356,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     );
   }
 
+  // ── Main UI ────────────────────────────────────────────────────
   return (
     <div className="pay-page">
       <Logo />
@@ -375,6 +421,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           </div>
         )}
 
+        {/* ── Arc mode ── */}
         {payMode === "arc" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(0,229,160,.05)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "9px 13px", marginBottom: 16, display: "flex", alignItems: "center", gap: 7 }}>
@@ -427,6 +474,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           </div>
         )}
 
+        {/* ── Unified mode ── */}
         {payMode === "unified" && (
           <div className="pay-actions">
             <div style={{ background: "rgba(139,92,246,.06)", border: "1px solid rgba(139,92,246,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16 }}>
@@ -446,21 +494,41 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
             </div>
             {!mounted ? null : !isConnected ? (
               <button className="pay-connect-btn" onClick={() => connect({ connector: injected() })}>Connect Wallet to Pay</button>
-            ) : unifiedStep === "depositing" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner" />
-                <p className="pay-spin-text">Step 1/2 — Depositing from {chainInfo?.name}...</p>
-                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 6 }}>Confirm in MetaMask</p>
+            ) : ["depositing", "spending", "recording", "switching", "sending_fee"].includes(unifiedStep) ? (
+              <div className="pay-spin-zone">
+                <div className="pay-spinner" />
+                <p className="pay-spin-text">{unifiedStatusText()}</p>
+                {/* Progress steps */}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 12 }}>
+                  {["depositing", "spending", "sending_fee"].map((step, i) => {
+                    const stepOrder = ["depositing", "spending", "recording", "switching", "sending_fee"];
+                    const currentIdx = stepOrder.indexOf(unifiedStep);
+                    const stepIdx = stepOrder.indexOf(step);
+                    const done = currentIdx > stepIdx;
+                    const active = currentIdx === stepIdx;
+                    return (
+                      <div key={step} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: done || active ? "var(--c)" : "var(--stroke2)" }} />
+                          <span style={{ fontSize: 9, color: done || active ? "var(--c)" : "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>
+                            {step === "depositing" ? "Deposit" : step === "spending" ? "Route" : "Fee"}
+                          </span>
+                        </div>
+                        {i < 2 && <div style={{ width: 16, height: 1, background: "var(--stroke2)" }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
+                  {unifiedStep === "switching" ? "Switching to Arc Testnet..." : "Confirm in MetaMask"}
+                </p>
               </div>
-            ) : unifiedStep === "spending" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner" /><p className="pay-spin-text">Step 2/2 — Routing to Arc Network...</p></div>
-            ) : unifiedStep === "recording" ? (
-              <div className="pay-spin-zone"><div className="pay-spinner" /><p className="pay-spin-text">Recording payment...</p></div>
             ) : (
               <>
                 <button className="pay-connect-btn" onClick={handleUnifiedPay} style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}>
                   Pay {formatUSDC(link.amount)} USDC from {chainInfo?.name}
                 </button>
-                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>2 MetaMask confirmations required</p>
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>3 steps — deposit · route · fee</p>
               </>
             )}
             {unifiedStep === "failed" && unifiedError && <div className="pay-err-box" style={{ marginTop: 12 }}>{unifiedError}</div>}

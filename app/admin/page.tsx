@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount, useConnect } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 const ADMIN_WALLET = "0x8557fabdc62f59a1ba7d6a74aaf0942cdcb68f69";
@@ -35,7 +34,7 @@ function StatCard({ label, value, unit, sub, color, icon }: {
 }) {
   return (
     <div className="stat-card">
-      <div className="stat-card-line" style={{ background: color }}/>
+      <div className="stat-card-line" style={{ background: color }} />
       <div className="stat-icon-wrap">{icon}</div>
       <div className="stat-value">
         {value}
@@ -50,7 +49,6 @@ function StatCard({ label, value, unit, sub, color, icon }: {
 export default function AdminPage() {
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
-  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [links, setLinks] = useState<PlatformLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,25 +60,34 @@ export default function AdminPage() {
   const isAdmin = address?.toLowerCase() === ADMIN_WALLET;
 
   const fetchAll = useCallback(async () => {
+    if (!address) return;
     setIsLoading(true);
     try {
       const res = await fetch(`/api/admin/links?wallet=${address}`);
       if (!res.ok) return;
       const data = await res.json();
       setLinks(data.links ?? []);
-    } catch {}
+    } catch { }
     finally { setIsLoading(false); }
-  }, []);
+  }, [address]);
 
-  // Fetch fee collector balance from ArcScan
+  // Fetch fee collector balance via Arc RPC
   const fetchFeeBalance = useCallback(async () => {
     try {
-      const res = await fetch(`https://testnet.arcscan.app/api/v2/addresses/${FEE_COLLECTOR}`);
+      const res = await fetch("https://rpc.testnet.arc.network", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_getBalance",
+          params: [FEE_COLLECTOR, "latest"],
+          id: 1,
+        }),
+      });
       const data = await res.json();
-      const bal = parseFloat(data?.coin_balance ?? "0") / 1e18;
+      const bal = parseInt(data?.result ?? "0x0", 16) / 1e18;
       setFeeBalance(bal.toFixed(4));
     } catch {
-      // fallback: calculate from DB
       setFeeBalance(null);
     }
   }, []);
@@ -144,20 +151,19 @@ export default function AdminPage() {
     .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime())
     .slice(0, 10);
 
-  // ── Not mounted ────────────────────────────────────────────────
   if (!mounted) return null;
 
   // ── Not connected ──────────────────────────────────────────────
   if (!isConnected) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, marginBottom: 40 }}/>
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 52, marginBottom: 40 }} />
         <div style={{ background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
-          <div style={{ height: 2, background: "var(--c)", position: "absolute", top: 0, left: 0, right: 0 }}/>
+          <div style={{ height: 2, background: "var(--c)", position: "absolute", top: 0, left: 0, right: 0 }} />
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--c-dim)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
             <svg viewBox="0 0 24 24" fill="none" width="24" height="24">
-              <rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--c)" strokeWidth="1.5"/>
-              <path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--c)" strokeWidth="1.5" />
+              <path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--ink-1)", marginBottom: 8 }}>Admin Access</p>
@@ -174,12 +180,12 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, marginBottom: 40 }}/>
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 52, marginBottom: 40 }} />
         <div style={{ background: "var(--surface)", border: "1px solid rgba(240,62,95,.2)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
-          <div style={{ height: 2, background: "var(--danger)", position: "absolute", top: 0, left: 0, right: 0 }}/>
+          <div style={{ height: 2, background: "var(--danger)", position: "absolute", top: 0, left: 0, right: 0 }} />
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
             <svg viewBox="0 0 24 24" fill="none" width="24" height="24">
-              <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Access Denied</p>
@@ -200,10 +206,10 @@ export default function AdminPage() {
       {/* Top bar */}
       <div style={{ height: 56, background: "var(--surface)", borderBottom: "1px solid var(--stroke)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 60, width: "auto" }}/>
-          <div style={{ width: 1, height: 20, background: "var(--stroke)" }}/>
+          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, width: "auto" }} />
+          <div style={{ width: 1, height: 20, background: "var(--stroke)" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", borderRadius: 20, padding: "3px 12px" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }}/>
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }} />
             <span style={{ fontSize: 10, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, letterSpacing: ".08em" }}>ADMIN</span>
           </div>
         </div>
@@ -226,35 +232,35 @@ export default function AdminPage() {
 
         {isLoading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
-            <div className="page-spinner"/>
+            <div className="page-spinner" />
           </div>
         ) : (
           <>
-            {/* ── Main stats ── */}
+            {/* Main stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
               <StatCard
                 label="Total Volume" value={fmt(totalVolume)} unit="USDC"
                 sub={`${completed.length} transactions`} color="var(--c)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/><path d="M10 6v8M7.5 8C7.5 6.9 8.6 6 10 6s2.5.9 2.5 2-1.1 2-2.5 2-2.5.9-2.5 2S8.6 14 10 14s2.5-.9 2.5-2" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /><path d="M10 6v8M7.5 8C7.5 6.9 8.6 6 10 6s2.5.9 2.5 2-1.1 2-2.5 2-2.5.9-2.5 2S8.6 14 10 14s2.5-.9 2.5-2" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round" /></svg>}
               />
               <StatCard
                 label="Fees Collected" value={feeBalance ?? fmt(totalFees)} unit="USDC"
                 sub={feeBalance ? "live balance" : `calc. ${FEE_PERCENT}%`} color="var(--warning)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 5h16v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="var(--warning)" strokeWidth="1.3"/><path d="M2 5l8 6 8-6" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round"/></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 5h16v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="var(--warning)" strokeWidth="1.3" /><path d="M2 5l8 6 8-6" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round" /></svg>}
               />
               <StatCard
                 label="Total Users" value={uniqueUsers.toString()}
                 sub={`${uniquePayers} unique payers`} color="var(--info)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="8" cy="7" r="3" stroke="var(--info)" strokeWidth="1.3"/><path d="M2 17c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round"/><path d="M13 11c2.21 0 4 1.79 4 4" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round"/><circle cx="14" cy="6" r="2" stroke="var(--info)" strokeWidth="1.3"/></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="8" cy="7" r="3" stroke="var(--info)" strokeWidth="1.3" /><path d="M2 17c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round" /><path d="M13 11c2.21 0 4 1.79 4 4" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round" /><circle cx="14" cy="6" r="2" stroke="var(--info)" strokeWidth="1.3" /></svg>}
               />
               <StatCard
                 label="Total Links" value={links.length.toString()}
                 sub={`${completionRate}% completion`} color="var(--c)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M11 7a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/><path d="M9 13a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M11 7a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /><path d="M9 13a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg>}
               />
             </div>
 
-            {/* ── Secondary stats ── */}
+            {/* Secondary stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
               {[
                 { label: "Completed", value: completed.length, color: "var(--c)" },
@@ -269,7 +275,7 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* ── Avg stats ── */}
+            {/* Avg stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>
               {[
                 { label: "Avg Payment", value: `${fmt(avgPayment)} USDC` },
@@ -283,12 +289,12 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* ── Volume chart ── */}
+            {/* Volume chart */}
             <div className="card" style={{ marginBottom: 18 }}>
               <div className="card-head" style={{ justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   <div className="card-head-icon">
-                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 14l4-4 4 2 4-6 4 2" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 14l4-4 4 2 4-6 4 2" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </div>
                   <div>
                     <div className="card-title">Platform Volume</div>
@@ -308,7 +314,7 @@ export default function AdminPage() {
                   <>
                     <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 140, marginBottom: 8 }}>
                       {chartData.map((day, i) => (
-                        <div key={day.date} title={`${day.label}: ${fmt(day.amount)} USDC (${day.count} tx)`} style={{ flex: 1, height: `${Math.max((day.amount / maxAmount) * 100, day.amount > 0 ? 3 : 1.5)}%`, background: day.amount > 0 ? (i === chartData.length - 1 ? "var(--c)" : "rgba(0,229,160,.4)") : "var(--raised)", borderRadius: "3px 3px 0 0", minHeight: 2, transition: "height .4s ease" }}/>
+                        <div key={day.date} title={`${day.label}: ${fmt(day.amount)} USDC (${day.count} tx)`} style={{ flex: 1, height: `${Math.max((day.amount / maxAmount) * 100, day.amount > 0 ? 3 : 1.5)}%`, background: day.amount > 0 ? (i === chartData.length - 1 ? "var(--c)" : "rgba(0,229,160,.4)") : "var(--raised)", borderRadius: "3px 3px 0 0", minHeight: 2, transition: "height .4s ease" }} />
                       ))}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -321,14 +327,14 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* ── Bottom grid ── */}
+            {/* Bottom grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
 
               {/* Top earners */}
               <div className="card">
                 <div className="card-head">
                   <div className="card-head-icon">
-                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 2l2.4 4.8 5.6.8-4 3.9.9 5.5L10 14.5l-4.9 2.5.9-5.5L2 7.6l5.6-.8L10 2z" stroke="var(--c)" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 2l2.4 4.8 5.6.8-4 3.9.9 5.5L10 14.5l-4.9 2.5.9-5.5L2 7.6l5.6-.8L10 2z" stroke="var(--c)" strokeWidth="1.3" strokeLinejoin="round" /></svg>
                   </div>
                   <div><div className="card-title">Top Earners</div><div className="card-subtitle">By total volume</div></div>
                 </div>
@@ -345,11 +351,11 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Link breakdown */}
+              {/* Platform breakdown */}
               <div className="card">
                 <div className="card-head">
                   <div className="card-head-icon">
-                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/></svg>
+                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /></svg>
                   </div>
                   <div><div className="card-title">Platform Breakdown</div><div className="card-subtitle">All links by status</div></div>
                 </div>
@@ -366,7 +372,7 @@ export default function AdminPage() {
                         <span style={{ fontSize: 12, fontFamily: "IBM Plex Mono, monospace", color: s.color, fontWeight: 700 }}>{s.count}</span>
                       </div>
                       <div style={{ height: 4, borderRadius: 4, background: "var(--raised)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: links.length > 0 ? `${(s.count / links.length) * 100}%` : "0%", background: s.color, borderRadius: 4, transition: "width .5s ease" }}/>
+                        <div style={{ height: "100%", width: links.length > 0 ? `${(s.count / links.length) * 100}%` : "0%", background: s.color, borderRadius: 4, transition: "width .5s ease" }} />
                       </div>
                     </div>
                   ))}
@@ -374,27 +380,25 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* ── Recent transactions ── */}
+            {/* Recent transactions */}
             <div className="card">
               <div className="card-head">
                 <div className="card-head-icon">
-                  <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/><path d="M10 6v4l2.5 2.5" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                  <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /><path d="M10 6v4l2.5 2.5" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg>
                 </div>
                 <div><div className="card-title">Recent Transactions</div><div className="card-subtitle">Latest 10 across all users</div></div>
               </div>
-
-              {/* Col headers */}
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, padding: "10px 24px", background: "var(--raised)", borderBottom: "1px solid var(--stroke)" }}>
                 {["TITLE", "AMOUNT", "RECIPIENT", "PAYER", "DATE"].map(c => (
                   <span key={c} style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", letterSpacing: ".12em", fontWeight: 600 }}>{c}</span>
                 ))}
               </div>
-
               <div style={{ maxHeight: 400, overflowY: "auto" }}>
                 {recentTx.length === 0 ? (
                   <div style={{ padding: 32, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No transactions yet</div>
                 ) : recentTx.map((tx, i) => (
-                  <div key={tx.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, padding: "13px 24px", alignItems: "center", borderBottom: i < recentTx.length - 1 ? "1px solid var(--stroke)" : "none", transition: "background .12s" }}
+                  <div key={tx.id}
+                    style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, padding: "13px 24px", alignItems: "center", borderBottom: i < recentTx.length - 1 ? "1px solid var(--stroke)" : "none", transition: "background .12s" }}
                     onMouseEnter={e => (e.currentTarget.style.background = "var(--raised)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
@@ -414,7 +418,6 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
-
           </>
         )}
       </div>
