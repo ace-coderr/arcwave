@@ -236,6 +236,21 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Dispute Raised</p>
           <p style={{ fontSize: 13, color: "var(--ink-2)" }}>Your dispute has been submitted. Admin will review and resolve within 24 hours.</p>
           <p style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12, fontFamily: "IBM Plex Mono, monospace" }}>Funds are frozen pending resolution.</p>
+          <a href="/"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              marginTop: 20, padding: "11px 22px",
+              background: "var(--raised)", border: "1px solid var(--stroke)",
+              borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700,
+              color: "var(--ink-2)", textDecoration: "none",
+              transition: "border-color .15s",
+            }}
+          >
+            <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back to Conduit
+          </a>
           <a
             href="/"
             style={{ display: "inline-block", marginTop: 16, fontSize: 13, color: "var(--ink-3)", textDecoration: "none", fontWeight: 600 }}
