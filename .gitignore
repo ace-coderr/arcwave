@@ -4,6 +4,7 @@ node_modules/
 .pnp.js
 
 # Local environment variables — NEVER commit these
+.env
 .env.local
 .env*.local
 
