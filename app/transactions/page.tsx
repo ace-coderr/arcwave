@@ -14,6 +14,7 @@ interface PaymentLink {
   paidBy?: string;
   paidAt?: string;
   createdAt: string;
+  isEscrow?: boolean;
 }
 
 function TxSkeleton() {
@@ -49,12 +50,18 @@ export default function TransactionsPage() {
       .finally(() => setIsLoading(false));
   }, [address]);
 
+  const completed = links.filter(l => l.status === "COMPLETED");
+  const totalReceived = completed.reduce((s, l) => s + parseFloat(l.amount), 0).toFixed(2);
+  const pending = links.filter(l => l.status === "ACTIVE").length;
+  const escrowCount = completed.filter(l => l.isEscrow).length;
+
   const exportCSV = () => {
     if (!completed.length) return;
     const rows = [
-      ["Title", "Amount (USDC)", "From", "Date", "TX Hash"],
+      ["Title", "Type", "Amount (USDC)", "From", "Date", "TX Hash"],
       ...completed.map(tx => [
         tx.title,
+        tx.isEscrow ? "Escrow" : "Payment",
         tx.amount,
         tx.paidBy ?? "",
         tx.paidAt ? formatDate(tx.paidAt) : "",
@@ -71,13 +78,9 @@ export default function TransactionsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const completed = links.filter(l => l.status === "COMPLETED");
-  const totalReceived = completed.reduce((s, l) => s + parseFloat(l.amount), 0).toFixed(2);
-  const pending = links.filter(l => l.status === "ACTIVE").length;
-
   return (
     <div className="app">
-      <NavBar />
+      <NavBar/>
 
       <div className="page-wrap">
         <div className="page-header">
@@ -88,7 +91,6 @@ export default function TransactionsPage() {
         {/* Stats */}
         {mounted && isConnected && (
           <div className="tx-stats">
-            {/* Total received */}
             <div className="tx-stat">
               <div className="tx-stat-bar" style={{ background: "var(--c)" }}/>
               {isLoading ? (
@@ -102,7 +104,6 @@ export default function TransactionsPage() {
               <div className="tx-stat-label">Total Received</div>
             </div>
 
-            {/* Transactions */}
             <div className="tx-stat">
               <div className="tx-stat-bar" style={{ background: "var(--info)" }}/>
               {isLoading ? (
@@ -113,7 +114,6 @@ export default function TransactionsPage() {
               <div className="tx-stat-label">Transactions</div>
             </div>
 
-            {/* Active links */}
             <div className="tx-stat">
               <div className="tx-stat-bar" style={{ background: "var(--warning)" }}/>
               {isLoading ? (
@@ -123,6 +123,14 @@ export default function TransactionsPage() {
               )}
               <div className="tx-stat-label">Active Links</div>
             </div>
+
+            {escrowCount > 0 && (
+              <div className="tx-stat">
+                <div className="tx-stat-bar" style={{ background: "#5b8ff9" }}/>
+                <div className="tx-stat-val">{escrowCount}</div>
+                <div className="tx-stat-label">Escrow Releases</div>
+              </div>
+            )}
           </div>
         )}
 
@@ -134,11 +142,7 @@ export default function TransactionsPage() {
               {!isLoading && <span className="count-tag">{completed.length} records</span>}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                className="btn-sm"
-                onClick={exportCSV}
-                disabled={completed.length === 0 || isLoading}
-              >
+              <button className="btn-sm" onClick={exportCSV} disabled={completed.length === 0 || isLoading}>
                 Export CSV
               </button>
             </div>
@@ -156,7 +160,6 @@ export default function TransactionsPage() {
           {/* Scrollable rows */}
           <div style={{ overflowY: "auto", maxHeight: 520 }}>
 
-            {/* Not connected */}
             {mounted && !isConnected && (
               <div className="empty">
                 <div className="empty-icon">
@@ -170,12 +173,10 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {/* Loading skeletons */}
             {mounted && isConnected && isLoading && (
               <>{[1, 2, 3, 4, 5].map(i => <TxSkeleton key={i}/>)}</>
             )}
 
-            {/* Empty */}
             {mounted && isConnected && !isLoading && completed.length === 0 && (
               <div className="empty">
                 <div className="empty-icon">
@@ -188,21 +189,42 @@ export default function TransactionsPage() {
               </div>
             )}
 
-            {/* Rows */}
             {mounted && !isLoading && completed.map(tx => (
               <div key={tx.id} className="tx-row fade-in">
                 <div>
-                  <p className="tx-name">{tx.title}</p>
-                  {tx.paidAt && <p className="tx-date-sm">Paid {formatDate(tx.paidAt)}</p>}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <p className="tx-name">{tx.title}</p>
+                    {tx.isEscrow && (
+                      <span style={{
+                        fontSize: 9,
+                        fontFamily: "IBM Plex Mono, monospace",
+                        fontWeight: 700,
+                        color: "#5b8ff9",
+                        background: "rgba(91,143,249,.12)",
+                        border: "1px solid rgba(91,143,249,.25)",
+                        borderRadius: 4,
+                        padding: "1px 5px",
+                        letterSpacing: ".06em",
+                        flexShrink: 0,
+                      }}>ESCROW</span>
+                    )}
+                  </div>
+                  {tx.paidAt && <p className="tx-date-sm">
+                    {tx.isEscrow ? "Released" : "Paid"} {formatDate(tx.paidAt)}
+                  </p>}
                 </div>
+
                 <span className="tx-amount">
                   +{formatUSDC(tx.amount)}
-                  <span style={{ fontSize: 10, color: "var(--c)", marginLeft: 3, fontWeight: 700 }}>USDC</span>
+                  <span style={{ fontSize: 10, color: tx.isEscrow ? "#5b8ff9" : "var(--c)", marginLeft: 3, fontWeight: 700 }}>USDC</span>
                 </span>
+
                 <span className="tx-from">
                   {tx.paidBy ? shortenAddress(tx.paidBy) : "—"}
                 </span>
+
                 <span className="tx-date">{formatDate(tx.createdAt)}</span>
+
                 {tx.txHash ? (
                   <a href={`https://testnet.arcscan.app/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer" className="tx-link">
                     {tx.txHash.slice(0, 6)}...{tx.txHash.slice(-4)} ↗
@@ -212,7 +234,6 @@ export default function TransactionsPage() {
                 )}
               </div>
             ))}
-
           </div>
         </div>
       </div>

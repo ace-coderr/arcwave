@@ -42,10 +42,48 @@ export async function GET(req: NextRequest) {
       data: { status: "EXPIRED" },
     });
     toExpire.forEach(l => { l.status = "EXPIRED"; });
-
   }
 
-  return NextResponse.json({ links });
+  // Fetch released escrow links and merge as ESCROW-tagged entries
+  const escrows = await db.escrowLink.findMany({
+    where: {
+      sellerAddress: address.toLowerCase(),
+      status: { in: ["RELEASED", "CONFIRMED"] },
+    },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      buyerAddress: true,
+      releaseTxHash: true,
+      confirmedAt: true,
+      createdAt: true,
+    },
+  });
+
+  // Map escrow releases to same shape as links but with isEscrow flag
+  const escrowLinks = escrows.map(e => ({
+    id: e.id,
+    title: e.title,
+    description: undefined,
+    amount: e.amount,
+    recipientAddress: address.toLowerCase(),
+    stealthAddress: undefined,
+    status: "COMPLETED",
+    expiresAt: null,
+    txHash: e.releaseTxHash ?? undefined,
+    forwardTxHash: undefined,
+    paidBy: e.buyerAddress ?? undefined,
+    paidAt: e.confirmedAt ?? null,
+    createdAt: e.createdAt,
+    isEscrow: true,
+  }));
+
+  // Merge and sort by date
+  const allLinks = [...links.map(l => ({ ...l, isEscrow: false })), ...escrowLinks]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  return NextResponse.json({ links: allLinks });
 }
 
 export async function POST(req: NextRequest) {
