@@ -9,58 +9,69 @@
    CONDUIT  ·  Design Tokens
    ════════════════════════════════════════ */
 :root {
-  --c:        #00E5A0;
-  --c-dim:    rgba(0,229,160,.10);
-  --c-glow:   rgba(0,229,160,.18);
-  --c-border: rgba(0,229,160,.22);
+  --c: #00E5A0;
+  --c-dim: rgba(0, 229, 160, .10);
+  --c-glow: rgba(0, 229, 160, .18);
+  --c-border: rgba(0, 229, 160, .22);
 
-  --bg:       #08090e;
-  --surface:  #0f111a;
-  --raised:   #141720;
-  --hover:    #1a1e2c;
-  --stroke:   rgba(255,255,255,.07);
-  --stroke2:  rgba(255,255,255,.12);
+  --bg: #08090e;
+  --surface: #0f111a;
+  --raised: #141720;
+  --hover: #1a1e2c;
+  --stroke: rgba(255, 255, 255, .07);
+  --stroke2: rgba(255, 255, 255, .12);
 
-  --ink-1:    #f8fafc;
-  --ink-2:    #8892a4;
-  --ink-3:    #424d5e;
+  --ink-1: #f8fafc;
+  --ink-2: #8892a4;
+  --ink-3: #424d5e;
 
-  --danger:   #f03e5f;
-  --warning:  #f5a623;
-  --info:     #5b8ff9;
+  --danger: #f03e5f;
+  --warning: #f5a623;
+  --info: #5b8ff9;
 
   --r-sm: 8px;
   --r-md: 12px;
   --r-lg: 16px;
   --r-xl: 20px;
 
-  --elev-1: 0 1px 0 rgba(255,255,255,.05), 0 4px 24px rgba(0,0,0,.45);
-  --elev-2: 0 1px 0 rgba(255,255,255,.06), 0 12px 48px rgba(0,0,0,.55);
+  --elev-1: 0 1px 0 rgba(255, 255, 255, .05), 0 4px 24px rgba(0, 0, 0, .45);
+  --elev-2: 0 1px 0 rgba(255, 255, 255, .06), 0 12px 48px rgba(0, 0, 0, .55);
 
   color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --bg:       #f0f2f7;
-  --surface:  #ffffff;
-  --raised:   #f4f6fb;
-  --hover:    #eaecf5;
-  --stroke:   rgba(0,0,0,.07);
-  --stroke2:  rgba(0,0,0,.13);
+  --bg: #f0f2f7;
+  --surface: #ffffff;
+  --raised: #f4f6fb;
+  --hover: #eaecf5;
+  --stroke: rgba(0, 0, 0, .07);
+  --stroke2: rgba(0, 0, 0, .13);
 
-  --ink-1:    #0d1117;
-  --ink-2:    #4a5568;
-  --ink-3:    #9da8b8;
+  --ink-1: #0d1117;
+  --ink-2: #4a5568;
+  --ink-3: #9da8b8;
 
-  --elev-1: 0 1px 0 rgba(255,255,255,.9), 0 4px 16px rgba(0,0,0,.07);
-  --elev-2: 0 1px 0 rgba(255,255,255,.9), 0 8px 32px rgba(0,0,0,.1);
+  --elev-1: 0 1px 0 rgba(255, 255, 255, .9), 0 4px 16px rgba(0, 0, 0, .07);
+  --elev-2: 0 1px 0 rgba(255, 255, 255, .9), 0 8px 32px rgba(0, 0, 0, .1);
 
   color-scheme: light;
 }
 
 /* ── Base ─────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; overflow-x: hidden; max-width: 100%; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  max-width: 100%;
+}
 
 body {
   background: var(--bg);
@@ -75,9 +86,18 @@ body {
   max-width: 100vw;
 }
 
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--stroke2); border-radius: 4px; }
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--stroke2);
+  border-radius: 4px;
+}
 
 /* ── Input ────────────────────────────────────────────────────── */
 .input {
@@ -93,9 +113,20 @@ body {
   transition: border-color .2s, box-shadow .2s;
   outline: none;
 }
-.input::placeholder { color: var(--ink-3); }
-.input:focus { border-color: var(--c); box-shadow: 0 0 0 3px var(--c-dim); }
-.input.mono { font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--c);
+  box-shadow: 0 0 0 3px var(--c-dim);
+}
+
+.input.mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
 
 /* ── Skeleton ─────────────────────────────────────────────────── */
 .skeleton {
@@ -106,13 +137,78 @@ body {
 }
 
 /* ── Keyframes ────────────────────────────────────────────────── */
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(1.5); } }
-@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
 
-.fade-up { animation: fadeUp .45s cubic-bezier(.16,1,.3,1) both; }
-.fade-in { animation: fadeIn .3s ease both; }
-.pulse-dot { animation: pulse 2.5s ease-in-out infinite; }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: .4;
+    transform: scale(1.5);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp .45s cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.fade-in {
+  animation: fadeIn .3s ease both;
+}
+
+.pulse-dot {
+  animation: pulse 2.5s ease-in-out infinite;
+}

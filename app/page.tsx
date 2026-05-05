@@ -26,7 +26,7 @@ export default function HomePage() {
       const done = links.filter((l: any) => l.status === "COMPLETED");
       const total = done.reduce((s: number, l: any) => s + parseFloat(l.amount || "0"), 0).toFixed(2);
       setStats({ totalLinks: links.length, completedLinks: done.length, totalEarned: total });
-    } catch {}
+    } catch { }
   }, [address]);
 
   useEffect(() => {
@@ -36,19 +36,19 @@ export default function HomePage() {
   const TRUST_ITEMS = [
     {
       label: "One-time use",
-      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M7 1l1.8 3.6L13 5.45l-3 2.92.7 4.13L7 10.6l-3.7 1.9.7-4.13L1 5.45l4.2-.85L7 1z" stroke="var(--c)" strokeWidth="1.2" strokeLinejoin="round"/></svg>
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M7 1l1.8 3.6L13 5.45l-3 2.92.7 4.13L7 10.6l-3.7 1.9.7-4.13L1 5.45l4.2-.85L7 1z" stroke="var(--c)" strokeWidth="1.2" strokeLinejoin="round" /></svg>
     },
     {
       label: "Stealth privacy",
-      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2" /><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round" /></svg>
     },
     {
       label: "Multi-chain",
-      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="7" cy="7" r="5.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M1.5 7h11M7 1.5c-1.5 1.5-1.5 9 0 11M7 1.5c1.5 1.5 1.5 9 0 11" stroke="var(--c)" strokeWidth="1.2"/></svg>
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><circle cx="7" cy="7" r="5.5" stroke="var(--c)" strokeWidth="1.2" /><path d="M1.5 7h11M7 1.5c-1.5 1.5-1.5 9 0 11M7 1.5c1.5 1.5 1.5 9 0 11" stroke="var(--c)" strokeWidth="1.2" /></svg>
     },
     {
       label: "No KYC",
-      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M2 7l3.5 3.5L12 3" stroke="var(--c)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      icon: <svg viewBox="0 0 14 14" fill="none" width="12" height="12"><path d="M2 7l3.5 3.5L12 3" stroke="var(--c)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
     },
   ];
 
@@ -57,7 +57,7 @@ export default function HomePage() {
       <NavBar />
 
       <div className="app-body">
-        {!mounted && <div className="loading-wrap"><div className="page-spinner"/></div>}
+        {!mounted && <div className="loading-wrap"><div className="page-spinner" /></div>}
 
         {/* Landing */}
         {mounted && !isConnected && (
@@ -66,13 +66,13 @@ export default function HomePage() {
               <div className="landing-inner">
                 <div>
                   <div className="hero-eyebrow">
-                    <span className="hero-eyebrow-dot pulse-dot"/>
+                    <span className="hero-eyebrow-dot pulse-dot" />
                     <span className="hero-eyebrow-text">LIVE ON ARC TESTNET</span>
                   </div>
 
                   <h1 className="hero-title">
-                    Send USDC.<br/>
-                    <em>No friction.</em><br/>
+                    Send USDC.<br />
+                    <em>No friction.</em><br />
                     Any chain.
                   </h1>
 
@@ -103,7 +103,7 @@ export default function HomePage() {
 
                 {/* Hero card */}
                 <div className="hero-card fade-up" style={{ animationDelay: ".1s" }}>
-                  <div className="hero-card-bar"/>
+                  <div className="hero-card-bar" />
                   <div className="hero-card-head">
                     <div className="hero-card-label">PAYMENT REQUEST</div>
                     <div>
@@ -120,14 +120,14 @@ export default function HomePage() {
                     <div className="hero-detail-row">
                       <span className="hero-detail-key">Network</span>
                       <span className="hero-detail-val">
-                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--c)", display: "inline-block" }}/>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--c)", display: "inline-block" }} />
                         Arc Testnet
                       </span>
                     </div>
                     <div className="hero-detail-row">
                       <span className="hero-detail-key">Privacy</span>
                       <span className="hero-detail-val" style={{ color: "var(--c)", fontSize: 11, display: "flex", alignItems: "center", gap: 5 }}>
-                        <svg viewBox="0 0 14 14" fill="none" width="11" height="11"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                        <svg viewBox="0 0 14 14" fill="none" width="11" height="11"><rect x="2.5" y="6" width="9" height="7" rx="1.5" stroke="var(--c)" strokeWidth="1.2" /><path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round" /></svg>
                         Stealth mode
                       </span>
                     </div>
@@ -139,7 +139,7 @@ export default function HomePage() {
                   <div className="hero-card-foot">
                     <button className="btn-pay-demo">Pay 50.00 USDC</button>
                     <div className="demo-net">
-                      <span className="demo-dot pulse-dot"/>
+                      <span className="demo-dot pulse-dot" />
                       <span className="demo-text">Arc Testnet · Chain 5042002</span>
                     </div>
                   </div>
@@ -168,7 +168,7 @@ export default function HomePage() {
                 <div className="features">
                   {["One-time use links", "Stealth mode privacy", "Multi-chain payments", "No sign-up required", "Sub-second settlement", "Open source", "Arc Network native"].map((f) => (
                     <div key={f} className="feat">
-                      <span className="feat-dot"/>{f}
+                      <span className="feat-dot" />{f}
                     </div>
                   ))}
                 </div>
@@ -193,7 +193,7 @@ export default function HomePage() {
                 <div className="quick-actions-grid">
                   <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="quick-action-card">
                     <div className="quick-action-icon">
-                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="6" stroke="var(--c)" strokeWidth="1.4"/><path d="M8 5v6M5.5 7.5C5.5 6.12 6.62 5 8 5s2.5 1.12 2.5 2.5S9.38 10 8 10s-2.5 1.12-2.5 2.5S6.62 15 8 15" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><circle cx="8" cy="8" r="6" stroke="var(--c)" strokeWidth="1.4" /><path d="M8 5v6M5.5 7.5C5.5 6.12 6.62 5 8 5s2.5 1.12 2.5 2.5S9.38 10 8 10s-2.5 1.12-2.5 2.5S6.62 15 8 15" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round" /></svg>
                     </div>
                     <div>
                       <div className="quick-action-label">Get USDC</div>
@@ -202,7 +202,7 @@ export default function HomePage() {
                   </a>
                   <a href="https://testnet.arcscan.app" target="_blank" rel="noopener noreferrer" className="quick-action-card">
                     <div className="quick-action-icon">
-                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M11 3l2 2-7 7-3-3 1.5-1.5 1.5 1.5L11 3z" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M2 14h12" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                      <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M11 3l2 2-7 7-3-3 1.5-1.5 1.5 1.5L11 3z" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinejoin="round" /><path d="M2 14h12" stroke="var(--ink-3)" strokeWidth="1.3" strokeLinecap="round" /></svg>
                     </div>
                     <div>
                       <div className="quick-action-label">Explorer</div>
@@ -221,10 +221,10 @@ export default function HomePage() {
         <span>Conduit v0.1.0</span>
         <div className="footer-links">
           <a href="https://x.com/conduit_pay" target="_blank" rel="noopener noreferrer" className="footer-link">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.845L1.255 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.845L1.255 2.25H8.08l4.253 5.622 5.912-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
           </a>
           <a href="https://t.me/conduit_app" target="_blank" rel="noopener noreferrer" className="footer-link">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.94-.918c-.64-.203-.654-.64.136-.954l11.49-4.43c.532-.194.998.131.838.856z"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.94-.918c-.64-.203-.654-.64.136-.954l11.49-4.43c.532-.194.998.131.838.856z" /></svg>
           </a>
         </div>
         <span>Built on Arc Network · Powered by Circle</span>
