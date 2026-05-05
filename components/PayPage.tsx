@@ -543,6 +543,21 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
         )}
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
+
+      <div style={{ marginTop: 16, padding: "14px 20px", background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-lg)", textAlign: "center", maxWidth: 440, width: "100%" }}>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10 }}>
+          Want to receive USDC payments like this?
+        </p>
+        <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "var(--c)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "#000", textDecoration: "none", boxShadow: "0 4px 14px rgba(0,229,160,.3)" }}>
+          <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          Create your own payment link
+        </a>
+        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
+          Free · No sign-up · Any chain
+        </p>
+      </div>
     </div>
   );
 }
