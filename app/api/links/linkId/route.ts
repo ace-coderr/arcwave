@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
 import { parseEther, formatEther } from "viem";
-import { sendPaymentReceivedEmail, sendLinkCancelledEmail } from "@/lib/email";
 
 interface RouteParams { params: { linkId: string } }
 
@@ -55,7 +54,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       amount: true,
       recipientAddress: true,
       stealthAddress: true,
-      notifyEmail: true,
       status: true,
       txHash: true,
     },
@@ -130,18 +128,6 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   console.log(`[PATCH] Marked COMPLETED. isStealthLink=${isStealthLink} isUnified=${isUnified}`);
 
-  // Send payment received notification
-  if (link.notifyEmail) {
-    sendPaymentReceivedEmail({
-      to: link.notifyEmail,
-      title: link.title,
-      amount: link.amount,
-      txHash,
-      paidBy: paidBy ?? undefined,
-      linkId: link.id,
-    }).catch(console.error);
-  }
-
   return NextResponse.json({
     success: true,
     link: {
@@ -173,15 +159,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
     where: { id: params.linkId },
     data: { status: "EXPIRED" },
   });
-
-  // Send cancellation notification
-  if (link.notifyEmail) {
-    sendLinkCancelledEmail({
-      to: link.notifyEmail,
-      title: link.title,
-      amount: link.amount,
-    }).catch(console.error);
-  }
 
   return NextResponse.json({ success: true, link: updated });
 }

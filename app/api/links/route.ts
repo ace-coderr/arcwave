@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { generateStealthWallet } from "@/lib/stealthWallet";
-import { sendLinkCreatedEmail, sendLinkExpiredEmail } from "@/lib/email";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -23,7 +22,6 @@ export async function GET(req: NextRequest) {
       stealthAddress: true,
       status: true,
       expiresAt: true,
-      notifyEmail: true,
       txHash: true,
       forwardTxHash: true,
       paidBy: true,
@@ -45,16 +43,6 @@ export async function GET(req: NextRequest) {
     });
     toExpire.forEach(l => { l.status = "EXPIRED"; });
 
-    // Send expiry notifications
-    for (const link of toExpire) {
-      if (link.notifyEmail) {
-        sendLinkExpiredEmail({
-          to: link.notifyEmail,
-          title: link.title,
-          amount: link.amount,
-        }).catch(console.error);
-      }
-    }
   }
 
   return NextResponse.json({ links });
@@ -68,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { title, amount, description, recipientAddress, stealthMode, expiresAt, notifyEmail } = body;
+  const { title, amount, description, recipientAddress, stealthMode, expiresAt } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -85,11 +73,6 @@ export async function POST(req: NextRequest) {
 
   if (expiresAt && new Date(expiresAt) <= new Date()) {
     return NextResponse.json({ error: "Expiry date must be in the future." }, { status: 400 });
-  }
-
-  // Validate email if provided
-  if (notifyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notifyEmail)) {
-    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
   let stealthAddress: string | undefined;
@@ -111,20 +94,8 @@ export async function POST(req: NextRequest) {
       stealthPrivateKey: stealthPrivateKey ?? null,
       status: "ACTIVE",
       expiresAt: expiresAt ? new Date(expiresAt) : null,
-      notifyEmail: notifyEmail?.trim() || null,
     },
   });
-
-  // Send link created notification
-  if (notifyEmail) {
-    sendLinkCreatedEmail({
-      to: notifyEmail,
-      title: link.title,
-      amount: link.amount,
-      linkId: link.id,
-      expiresAt: link.expiresAt,
-    }).catch(console.error);
-  }
 
   return NextResponse.json({ link }, { status: 201 });
 }

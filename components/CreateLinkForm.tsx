@@ -15,7 +15,6 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
   const [description, setDescription] = useState("");
   const [stealthMode, setStealthMode] = useState(false);
   const [expiresAt, setExpiresAt] = useState("");
-  const [notifyEmail, setNotifyEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -30,7 +29,6 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
     const parsed = parseFloat(amount);
     if (isNaN(parsed) || parsed <= 0) { setError("Enter a valid amount greater than 0."); return; }
     if (expiresAt && new Date(expiresAt) <= new Date()) { setError("Expiry date must be in the future."); return; }
-    if (notifyEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notifyEmail)) { setError("Enter a valid email address."); return; }
 
     setIsLoading(true);
     setError("");
@@ -45,14 +43,13 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
           recipientAddress: address,
           stealthMode,
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
-          notifyEmail: notifyEmail.trim() || undefined,
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { link } = await res.json();
       setCreatedLink(getPaymentUrl(link.id));
       setTitle(""); setAmount(""); setDescription("");
-      setStealthMode(false); setExpiresAt(""); setNotifyEmail("");
+      setStealthMode(false); setExpiresAt("");
       onLinkCreated();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
@@ -154,33 +151,6 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
                   <button type="button" onClick={() => setExpiresAt("")} style={{ marginLeft: 4, fontSize: 10, color: "var(--ink-3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ clear</button>
                 </div>
               )}
-            </div>
-
-            {/* Notify email */}
-            <div className="form-group">
-              <label className="form-label">
-                Notification Email <span className="form-label-optional">(optional)</span>
-              </label>
-              <div className="form-input-wrap">
-                <input
-                  type="email"
-                  className="input"
-                  placeholder="you@example.com"
-                  value={notifyEmail}
-                  onChange={e => setNotifyEmail(e.target.value)}
-                  disabled={!isConnected}
-                  style={{ paddingLeft: 36 }}
-                />
-                <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
-                  <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-                    <rect x="2" y="3" width="12" height="10" rx="2" stroke="var(--ink-3)" strokeWidth="1.2"/>
-                    <path d="M2 6l6 4 6-4" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinecap="round"/>
-                  </svg>
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>
-                Get notified when link is created, paid or cancelled
-              </div>
             </div>
 
             {/* Stealth Mode Toggle */}
