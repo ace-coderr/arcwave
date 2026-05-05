@@ -258,7 +258,7 @@ export default function AdminPage() {
           <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, width: "auto" }} />
           <div style={{ width: 1, height: 20, background: "var(--stroke)" }} />
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", borderRadius: 20, padding: "3px 12px" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--info)" }} />
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }} />
             <span style={{ fontSize: 10, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, letterSpacing: ".08em" }}>ADMIN</span>
           </div>
           {disputedEscrows.length > 0 && (
