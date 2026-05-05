@@ -292,7 +292,7 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
               disabled={confirming}
               style={{ width: "100%", padding: "14px", background: "var(--c)", border: "none", borderRadius: "var(--r-md)", color: "#000", fontSize: 14, fontWeight: 800, cursor: confirming ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", marginBottom: 10, boxShadow: "0 4px 16px rgba(0,229,160,.35)", opacity: confirming ? .5 : 1 }}
             >
-              {confirming ? "Releasing funds..." : "✅ I received my order — Release funds"}
+              {confirming ? "Releasing funds..." : "I received my order — Release funds"}
             </button>
           )}
 
@@ -302,7 +302,7 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
               onClick={() => setShowDisputeForm(true)}
               style={{ width: "100%", padding: "12px", background: "transparent", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-md)", color: "var(--danger)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}
             >
-              ⚠️ Raise a dispute
+              Raise a dispute
             </button>
           ) : (
             <div style={{ textAlign: "left", marginTop: 8 }}>

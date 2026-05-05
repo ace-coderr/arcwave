@@ -180,7 +180,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setResolveMsg(prev => ({ ...prev, [escrowId]: action === "release" ? "✓ Released to seller" : "✓ Refunded to buyer" }));
+        setResolveMsg(prev => ({ ...prev, [escrowId]: action === "release" ? "Released to seller" : "Refunded to buyer" }));
         fetchAll();
       } else {
         setResolveMsg(prev => ({ ...prev, [escrowId]: `Error: ${data.error}` }));
@@ -396,7 +396,10 @@ export default function AdminPage() {
                         <p style={{ fontSize: 11, color: "var(--danger)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{e.disputeReason}"</p>
                       )}
                       {e.sellerContact && (
-                        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, fontFamily: "IBM Plex Mono, monospace" }}>📞 {e.sellerContact}</p>
+                        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, fontFamily: "IBM Plex Mono, monospace", display: "flex", alignItems: "center", gap: 4 }}>
+                          <svg viewBox="0 0 14 14" fill="none" width="10" height="10"><path d="M2 2.5C2 7.7 6.3 12 11.5 12l.5-2-2-1-1 1C7 9 5 7 4 5l1-1-1-2H2z" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinejoin="round" /></svg>
+                          {e.sellerContact}
+                        </p>
                       )}
                       {e.txHash && (
                         <a href={`https://testnet.arcscan.app/tx/${e.txHash}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none" }}>
@@ -432,11 +435,11 @@ export default function AdminPage() {
                             <>
                               <button onClick={() => resolveEscrow(e.id, "release")} disabled={resolvingId === e.id}
                                 style={{ padding: "7px 16px", background: "var(--c)", border: "none", borderRadius: "var(--r-sm)", color: "#000", fontSize: 12, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}>
-                                {resolvingId === e.id ? "Processing..." : "✓ Release to Seller"}
+                                {resolvingId === e.id ? "Processing..." : "Release to Seller"}
                               </button>
                               <button onClick={() => resolveEscrow(e.id, "refund")} disabled={resolvingId === e.id}
                                 style={{ padding: "7px 16px", background: "transparent", border: "1px solid var(--danger)", borderRadius: "var(--r-sm)", color: "var(--danger)", fontSize: 12, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}>
-                                {resolvingId === e.id ? "Processing..." : "↩ Refund Buyer"}
+                                {resolvingId === e.id ? "Processing..." : "Refund Buyer"}
                               </button>
                               <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Review dispute reason above before resolving</span>
                             </>
