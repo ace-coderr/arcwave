@@ -57,7 +57,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
       <div className="form-card-header">
         <div className="form-card-header-icon">
           <svg viewBox="0 0 18 18" fill="none" width="15" height="15">
-            <path d="M9 3v12M3 9h12" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M9 3v12M3 9h12" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
         <div>
@@ -73,7 +73,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
               <div className="success-box-header">
                 <div className="success-check-icon">
                   <svg viewBox="0 0 12 12" fill="none" width="10" height="10">
-                    <path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
                 <span className="success-label">Link created successfully</span>
@@ -116,8 +116,8 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
               <div className="stealth-toggle-info">
                 <div className="stealth-toggle-label">
                   <svg viewBox="0 0 16 16" fill="none" width="13" height="13" style={{ flexShrink: 0 }}>
-                    <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-                    <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                    <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                    <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
                   </svg>
                   Stealth Mode
                 </div>
@@ -128,15 +128,15 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
                 </div>
               </div>
               <button type="button" onClick={() => setStealthMode(!stealthMode)} disabled={!isConnected} className={`toggle-switch${stealthMode ? " on" : ""}`} aria-label="Toggle stealth mode">
-                <span className="toggle-knob"/>
+                <span className="toggle-knob" />
               </button>
             </div>
 
             {stealthMode && (
               <div className="stealth-info-box animate-fade-up">
                 <svg viewBox="0 0 16 16" fill="none" width="14" height="14" style={{ flexShrink: 0, marginTop: 1 }}>
-                  <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="#a78bfa" strokeWidth="1.3"/>
-                  <path d="M5 7V5a3 3 0 016 0v2" stroke="#a78bfa" strokeWidth="1.3" strokeLinecap="round"/>
+                  <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="#a78bfa" strokeWidth="1.3" />
+                  <path d="M5 7V5a3 3 0 016 0v2" stroke="#a78bfa" strokeWidth="1.3" strokeLinecap="round" />
                 </svg>
                 <p style={{ fontSize: 11, color: "#a78bfa", lineHeight: 1.5 }}>
                   A fresh temp wallet will receive the payment and auto-forward to your real address. Payer cannot track you on ArcScan.
@@ -149,15 +149,15 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
             <button type="submit" className="form-submit-btn" disabled={isLoading || !isConnected}>
               {isLoading ? (
                 <span className="form-submit-spinner">
-                  <span className="spinner"/>
+                  <span className="spinner" />
                   {stealthMode ? "Generating stealth link..." : "Generating..."}
                 </span>
               ) : !isConnected ? "Connect Wallet First"
                 : stealthMode ? (
                   <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
                     <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-                      <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-                      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+                      <rect x="3" y="7" width="10" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
                     </svg>
                     Generate Private Link
                   </span>

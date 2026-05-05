@@ -550,7 +550,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
         </p>
         <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "var(--c)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "#000", textDecoration: "none", boxShadow: "0 4px 14px rgba(0,229,160,.3)" }}>
           <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           Create your own payment link
         </a>

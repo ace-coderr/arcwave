@@ -173,8 +173,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           <div className="table-not-connected">
             <div className="table-not-connected-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
-                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5" />
+                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
             <p className="table-not-connected-text">Wallet not connected</p>
@@ -187,8 +187,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           <div className="table-empty">
             <div className="table-empty-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
             <p className="table-empty-title">
