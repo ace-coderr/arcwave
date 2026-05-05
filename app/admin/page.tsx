@@ -377,7 +377,7 @@ export default function AdminPage() {
               <div style={{ maxHeight: 400, overflowY: "auto" }}>
                 {filteredEscrows.length === 0 ? (
                   <div style={{ padding: 32, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
-                    {escrowTab === "disputed" ? "No disputes 🎉" : escrowTab === "holding" ? "No funds currently held" : "No escrow links yet"}
+                    {escrowTab === "disputed" ? "No disputes" : escrowTab === "holding" ? "No funds currently held" : "No escrow links yet"}
                   </div>
                 ) : filteredEscrows.map((e, i) => (
                   <div key={e.id}
