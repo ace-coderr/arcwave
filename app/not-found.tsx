@@ -17,7 +17,7 @@ export default function NotFound() {
       <img
         src="/conduit-logo-white.png"
         alt="Conduit"
-        style={{ height: 40, width: "auto", marginBottom: 48, objectFit: "contain" }}
+        style={{ height: 80, width: "auto", marginBottom: 48, objectFit: "contain" }}
       />
 
       {/* 404 */}
