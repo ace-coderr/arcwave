@@ -76,7 +76,7 @@ export default function EscrowPage() {
       if (!res.ok) return;
       const data = await res.json();
       setEscrows(data.escrows ?? []);
-    } catch {}
+    } catch { }
     finally { setIsLoading(false); }
   }, [address]);
 
@@ -88,6 +88,7 @@ export default function EscrowPage() {
     const parsed = parseFloat(amount);
     if (isNaN(parsed) || parsed <= 0) { setCreateError("Enter a valid amount."); return; }
     if (!title.trim()) { setCreateError("Title is required."); return; }
+    if (!sellerContact.trim()) { setCreateError("Contact is required so buyer can reach you."); return; }
     setIsCreating(true); setCreateError("");
     try {
       const res = await fetch("/api/escrow", {
@@ -112,7 +113,7 @@ export default function EscrowPage() {
     try {
       await fetch(`/api/escrow/${id}`, { method: "DELETE" });
       fetchEscrows();
-    } catch {}
+    } catch { }
     finally { setCancellingId(null); }
   };
 
@@ -138,7 +139,7 @@ export default function EscrowPage() {
 
   return (
     <div className="app">
-      <NavBar/>
+      <NavBar />
       <div className="page-wrap">
 
         <div className="page-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -163,7 +164,7 @@ export default function EscrowPage() {
               { label: "Total Escrows", value: escrows.length.toString(), unit: "", sub: `${counts.ACTIVE} active`, color: "var(--warning)" },
             ].map(s => (
               <div key={s.label} className="stat-card">
-                <div className="stat-card-line" style={{ background: s.color }}/>
+                <div className="stat-card-line" style={{ background: s.color }} />
                 <div className="stat-value">{s.value}{s.unit && <span style={{ fontSize: 13, color: s.color, marginLeft: 4, fontFamily: "IBM Plex Mono, monospace" }}>{s.unit}</span>}</div>
                 <div className="stat-label">{s.label}</div>
                 <div className="stat-sub">{s.sub}</div>
@@ -177,7 +178,7 @@ export default function EscrowPage() {
           <div className="card" style={{ marginBottom: 20 }}>
             <div className="card-head">
               <div className="card-head-icon">
-                <svg viewBox="0 0 16 16" fill="none" width="14" height="14"><rect x="2" y="6" width="12" height="9" rx="1.5" stroke="var(--c)" strokeWidth="1.3"/><path d="M5 6V4.5a3 3 0 016 0V6" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                <svg viewBox="0 0 16 16" fill="none" width="14" height="14"><rect x="2" y="6" width="12" height="9" rx="1.5" stroke="var(--c)" strokeWidth="1.3" /><path d="M5 6V4.5a3 3 0 016 0V6" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg>
               </div>
               <div><div className="card-title">New Escrow Link</div><div className="card-subtitle">Buyer pays, funds held until confirmed</div></div>
             </div>
@@ -187,7 +188,7 @@ export default function EscrowPage() {
                   <div className="success-box">
                     <div className="success-box-header">
                       <div className="success-check-icon">
-                        <svg viewBox="0 0 12 12" fill="none" width="10" height="10"><path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg viewBox="0 0 12 12" fill="none" width="10" height="10"><path d="M2 6l2.5 2.5L10 3.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                       </div>
                       <span className="success-label">Escrow link created!</span>
                     </div>
@@ -207,28 +208,28 @@ export default function EscrowPage() {
                 <form onSubmit={createEscrow}>
                   <div className="form-group">
                     <label className="form-label">Title</label>
-                    <input type="text" className="input" placeholder="e.g. iPhone 15 Pro — Lagos delivery" value={title} onChange={e => setTitle(e.target.value)} maxLength={80} required/>
+                    <input type="text" className="input" placeholder="e.g. iPhone 15 Pro — Lagos delivery" value={title} onChange={e => setTitle(e.target.value)} maxLength={80} required />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Amount</label>
                     <div className="form-input-wrap">
-                      <input type="number" className="input mono" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} min="0.000001" step="any" required style={{ paddingRight: 52 }}/>
+                      <input type="number" className="input mono" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} min="0.000001" step="any" required style={{ paddingRight: 52 }} />
                       <span className="form-input-suffix">USDC</span>
                     </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Description <span className="form-label-optional">(optional)</span></label>
-                    <input type="text" className="input" placeholder="e.g. Item details, delivery terms..." value={description} onChange={e => setDescription(e.target.value)} maxLength={200}/>
+                    <input type="text" className="input" placeholder="e.g. Item details, delivery terms..." value={description} onChange={e => setDescription(e.target.value)} maxLength={200} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Your Contact <span className="form-label-optional">(optional)</span></label>
-                    <input type="text" className="input" placeholder="e.g. @ace_must_win on Telegram, +234..." value={sellerContact} onChange={e => setSellerContact(e.target.value)} maxLength={100}/>
-                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>Shown to buyer after payment so they can reach you for delivery</div>
+                    <label className="form-label">Your Contact</label>
+                    <input type="text" className="input" placeholder="e.g. @ayomide on Telegram, +234..." value={sellerContact} onChange={e => setSellerContact(e.target.value)} maxLength={100} required />
+                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>Required — buyer needs this to arrange delivery</div>
                   </div>
                   <div className="stealth-info-box" style={{ marginBottom: 16 }}>
                     <svg viewBox="0 0 16 16" fill="none" width="14" height="14" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <rect x="2" y="6" width="12" height="9" rx="1.5" stroke="var(--c)" strokeWidth="1.3"/>
-                      <path d="M5 6V4.5a3 3 0 016 0V6" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/>
+                      <rect x="2" y="6" width="12" height="9" rx="1.5" stroke="var(--c)" strokeWidth="1.3" />
+                      <path d="M5 6V4.5a3 3 0 016 0V6" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" />
                     </svg>
                     <p style={{ fontSize: 11, color: "var(--c)", lineHeight: 1.5 }}>
                       Funds are held in an escrow wallet for 7 days. Auto-releases to you if buyer doesn't confirm. Buyer can raise a dispute at any time.
@@ -236,7 +237,7 @@ export default function EscrowPage() {
                   </div>
                   {createError && <div className="form-error">{createError}</div>}
                   <button type="submit" className="form-submit-btn" disabled={isCreating}>
-                    {isCreating ? <span className="form-submit-spinner"><span className="spinner"/>Creating escrow...</span> : "Create Escrow Link"}
+                    {isCreating ? <span className="form-submit-spinner"><span className="spinner" />Creating escrow...</span> : "Create Escrow Link"}
                   </button>
                 </form>
               )}
@@ -248,7 +249,7 @@ export default function EscrowPage() {
         {mounted && !isConnected && (
           <div className="empty" style={{ paddingTop: 80 }}>
             <div className="empty-icon">
-              <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--ink-3)" strokeWidth="1.5"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--ink-3)" strokeWidth="1.5" /><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </div>
             <p className="empty-title">Connect your wallet</p>
             <p className="empty-sub">Connect to create and manage escrow links</p>
@@ -282,12 +283,12 @@ export default function EscrowPage() {
             )}
 
             <div style={{ overflowY: "auto", maxHeight: 520 }}>
-              {isLoading && <div className="loading-center" style={{ height: 160 }}><div className="page-spinner"/></div>}
+              {isLoading && <div className="loading-center" style={{ height: 160 }}><div className="page-spinner" /></div>}
 
               {!isLoading && filtered.length === 0 && (
                 <div className="table-empty">
                   <div className="table-empty-icon">
-                    <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--ink-3)" strokeWidth="1.5"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--ink-3)" strokeWidth="1.5" /><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" /></svg>
                   </div>
                   <p className="table-empty-title">{filter === "ALL" ? "No escrow links yet" : `No ${filter.toLowerCase()} escrows`}</p>
                   <p className="table-empty-sub">{filter === "ALL" ? "Create your first escrow link above" : "Try a different filter"}</p>
@@ -298,12 +299,12 @@ export default function EscrowPage() {
                 <div key={e.id} className="table-row" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr" }}>
                   <div className="table-cell-title">
                     <div className="table-cell-title-name">
-                      <span className="table-cell-status-dot" style={{ background: statusColor(e.status) }}/>
+                      <span className="table-cell-status-dot" style={{ background: statusColor(e.status) }} />
                       <span className="table-cell-title-text">{e.title}</span>
                       {e.status === "DISPUTED" && <span style={{ fontSize: 9, background: "rgba(240,62,95,.15)", color: "var(--danger)", border: "1px solid rgba(240,62,95,.3)", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>DISPUTE</span>}
                     </div>
                     {e.description && <p className="table-cell-description">{e.description}</p>}
-                    {e.status === "HOLDING" && e.releaseDeadline && <Countdown deadline={e.releaseDeadline}/>}
+                    {e.status === "HOLDING" && e.releaseDeadline && <Countdown deadline={e.releaseDeadline} />}
                     {e.disputeReason && <p style={{ fontSize: 10, color: "var(--danger)", marginTop: 3 }}>"{e.disputeReason}"</p>}
                     {e.releaseTxHash && (
                       <a href={`https://testnet.arcscan.app/tx/${e.releaseTxHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">
@@ -314,7 +315,7 @@ export default function EscrowPage() {
 
                   <div>
                     <span className={`status-badge ${statusClass(e.status)}`}>
-                      <span className="status-badge-dot"/>
+                      <span className="status-badge-dot" />
                       {e.status}
                     </span>
                   </div>
