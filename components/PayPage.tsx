@@ -30,6 +30,8 @@ interface PaymentLink {
   title: string;
   description?: string;
   amount: string;
+  customAmount?: boolean;
+  minAmount?: string;
   stealthAddress?: string | null;
   recipientAddress?: string;
   status: string;
@@ -107,6 +109,14 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   const [unifiedTxHash, setUnifiedTxHash] = useState("");
   const [unifiedError, setUnifiedError] = useState("");
 
+  // Custom amount state
+  const isCustomAmount = !!link.customAmount;
+  const [payerAmount, setPayerAmount] = useState("");
+  const minAmount = link.minAmount ? parseFloat(link.minAmount) : 0;
+
+  // Effective amount — fixed or payer-entered
+  const effectiveAmount = isCustomAmount ? payerAmount : link.amount;
+
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
@@ -119,7 +129,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     ? maskAddress(link.stealthAddress)
     : link.recipientAddress ? maskAddress(link.recipientAddress) : "••••••••••••••••••";
 
-  const { fee: feeAmount, totalPays } = calcFee(link.amount);
+  const { fee: feeAmount, totalPays } = calcFee(effectiveAmount || "0");
   const { data: balance } = useBalance({ address, chainId: arcTestnet.id });
 
   const { sendTransaction: sendPayment, isPending: isPaymentPending } = useSendTransaction();
@@ -162,11 +172,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       sendFee(
         { to: FEE_COLLECTOR as `0x${string}`, value: parseEther(feeAmount), chainId: arcTestnet.id },
         {
-          onSuccess: (hash) => {
-            setFeeTxHash(hash);
-            setUnifiedStep("done");
-            setPaySuccess(true);
-          },
+          onSuccess: (hash) => { setFeeTxHash(hash); setUnifiedStep("done"); setPaySuccess(true); },
           onError: (err: Error) => {
             console.warn("[unified fee] Fee tx failed:", err.message);
             setUnifiedStep("failed");
@@ -184,7 +190,12 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       const res = await fetch(`/api/links/${link.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ txHash: hash, paidBy: payer, paymentType: type }),
+        body: JSON.stringify({
+          txHash: hash,
+          paidBy: payer,
+          paymentType: type,
+          paidAmount: effectiveAmount, // send actual paid amount for custom links
+        }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Could not record payment."); return; }
@@ -199,12 +210,24 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
     } finally { setIsMarkingPaid(false); }
   };
 
+  // Validate custom amount
+  const validatePayerAmount = (): string | null => {
+    const val = parseFloat(payerAmount);
+    if (isNaN(val) || val <= 0) return "Enter a valid amount.";
+    if (minAmount > 0 && val < minAmount) return `Minimum amount is ${minAmount} USDC.`;
+    return null;
+  };
+
   const handleArcPay = () => {
+    if (isCustomAmount) {
+      const err = validatePayerAmount();
+      if (err) { setError(err); return; }
+    }
     if (!paymentTarget) { setError("Payment target not available."); return; }
     setError("");
     setArcStep("sending_payment");
     sendPayment(
-      { to: paymentTarget, value: parseEther(link.amount), chainId: arcTestnet.id },
+      { to: paymentTarget, value: parseEther(effectiveAmount), chainId: arcTestnet.id },
       {
         onSuccess: (hash) => { setTxHash(hash); },
         onError: (err: Error) => {
@@ -229,6 +252,10 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   };
 
   const handleUnifiedPay = async () => {
+    if (isCustomAmount) {
+      const err = validatePayerAmount();
+      if (err) { setUnifiedError(err); return; }
+    }
     setUnifiedError("");
     setUnifiedStep("depositing");
     try {
@@ -246,21 +273,18 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       const recipientAddr = link.recipientAddress || link.stealthAddress;
       if (!recipientAddr) throw new Error("Recipient address not available.");
 
-      const depositResult = await kit.unifiedBalance.deposit({ from: { adapter, chain: selectedChain as any }, amount: link.amount, token: "USDC" });
+      const depositResult = await kit.unifiedBalance.deposit({ from: { adapter, chain: selectedChain as any }, amount: effectiveAmount, token: "USDC" });
       setUnifiedTxHash(extractHash(depositResult));
       setUnifiedStep("spending");
 
-      const spendResult = await kit.unifiedBalance.spend({ from: { adapter }, amount: link.amount, to: { adapter, chain: "Arc_Testnet", recipientAddress: recipientAddr } });
+      const spendResult = await kit.unifiedBalance.spend({ from: { adapter }, amount: effectiveAmount, to: { adapter, chain: "Arc_Testnet", recipientAddress: recipientAddr } });
       setUnifiedStep("recording");
 
       const finalHash = extractHash(spendResult) || extractHash(depositResult) || `0x_unified_${Date.now()}`;
-      if (address) await recordPayment(finalHash, address, "unified", false); // don't show success yet — wait for fee
+      if (address) await recordPayment(finalHash, address, "unified", false);
 
-      // Switch to Arc to send fee
       setUnifiedStep("switching");
       switchChain({ chainId: arcTestnet.id });
-      // useEffect watches isOnArc + unifiedStep === "switching" to trigger fee send
-
     } catch (err: any) {
       setUnifiedError(err.message ?? "Cross-chain payment failed.");
       setUnifiedStep("failed");
@@ -268,7 +292,8 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
   };
 
   const bal = balance ? parseFloat(formatEther(balance.value)) : 0;
-  const hasEnough = bal >= parseFloat(totalPays);
+  const amountValid = isCustomAmount ? !validatePayerAmount() && payerAmount !== "" : true;
+  const hasEnough = amountValid && effectiveAmount ? bal >= parseFloat(totalPays) : false;
   const chainInfo = SOURCE_CHAINS.find(c => c.id === selectedChain);
   const isArcBusy = ["sending_payment", "sending_fee", "recording"].includes(arcStep) || isPaymentPending || isPaymentWaiting || isFeePending || isFeeWaiting || isMarkingPaid;
 
@@ -342,7 +367,7 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
             </div>
             <p className="pay-success-title">Payment Complete!</p>
             <p className="pay-success-desc">
-              <strong style={{ color: "var(--ink-1)" }}>{formatUSDC(link.amount)} USDC</strong> successfully sent
+              <strong style={{ color: "var(--ink-1)" }}>{formatUSDC(effectiveAmount)} USDC</strong> successfully sent
               {payMode === "unified" && chainInfo && <span style={{ color: "var(--ink-3)" }}> via {chainInfo.name}</span>}
             </p>
             <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 14 }}>This link is now closed — one-time use only.</p>
@@ -351,6 +376,17 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
             )}
           </div>
         </div>
+
+        {/* Create your own CTA */}
+        <div style={{ marginTop: 16, padding: "14px 20px", background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-lg)", textAlign: "center", maxWidth: 440, width: "100%" }}>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10 }}>Want to receive USDC payments like this?</p>
+          <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "var(--c)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "#000", textDecoration: "none", boxShadow: "0 4px 14px rgba(0,229,160,.3)" }}>
+            <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            Create your own payment link
+          </a>
+          <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>Free · No sign-up · Any chain</p>
+        </div>
+
         <p className="pay-powered">Powered by Arc Network & Circle</p>
       </div>
     );
@@ -364,15 +400,38 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
       <div className="pay-card">
         <div className="pay-card-bar" />
 
+        {/* Amount zone */}
         <div className="pay-amount-zone">
-          <div>
-            <span className="pay-amount">{formatUSDC(link.amount)}</span>
-            <span className="pay-currency">USDC</span>
-          </div>
+          {isCustomAmount ? (
+            <div>
+              <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10, fontFamily: "IBM Plex Mono, monospace", letterSpacing: ".06em" }}>ENTER AMOUNT</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 8 }}>
+                <input
+                  type="number"
+                  value={payerAmount}
+                  onChange={e => setPayerAmount(e.target.value)}
+                  placeholder="0.00"
+                  min={minAmount > 0 ? minAmount : "0.000001"}
+                  step="any"
+                  style={{ fontSize: 42, fontWeight: 900, color: "var(--ink-1)", fontFamily: "IBM Plex Mono, monospace", letterSpacing: "-.04em", background: "transparent", border: "none", outline: "none", textAlign: "center", width: 180 }}
+                />
+                <span className="pay-currency">USDC</span>
+              </div>
+              {minAmount > 0 && (
+                <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center" }}>Minimum: {minAmount} USDC</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <span className="pay-amount">{formatUSDC(link.amount)}</span>
+              <span className="pay-currency">USDC</span>
+            </div>
+          )}
           <p className="pay-link-title">{link.title}</p>
           {link.description && <p className="pay-link-desc">{link.description}</p>}
         </div>
 
+        {/* Details */}
         <div className="pay-details">
           <div className="pay-detail">
             <span className="pay-detail-k">Pay to</span>
@@ -394,22 +453,27 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
                 : <span style={{ color: "var(--ink-3)" }}>Standard</span>}
             </span>
           </div>
-          <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
-            <div className="pay-detail">
-              <span className="pay-detail-k">Recipient gets</span>
-              <span className="pay-detail-v" style={{ color: "var(--c)" }}>{link.amount} USDC</span>
+
+          {/* Fee breakdown — only show when amount is known */}
+          {effectiveAmount && parseFloat(effectiveAmount) > 0 && (
+            <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
+              <div className="pay-detail">
+                <span className="pay-detail-k">Recipient gets</span>
+                <span className="pay-detail-v" style={{ color: "var(--c)" }}>{effectiveAmount} USDC</span>
+              </div>
+              <div className="pay-detail" style={{ marginTop: 6 }}>
+                <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>Service fee ({FEE_PERCENT}%)</span>
+                <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>+{feeAmount} USDC</span>
+              </div>
+              <div className="pay-detail" style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--stroke)" }}>
+                <span className="pay-detail-k" style={{ fontWeight: 700, color: "var(--ink-1)" }}>Total you pay</span>
+                <span className="pay-detail-v" style={{ fontWeight: 800, color: "var(--ink-1)" }}>{totalPays} USDC</span>
+              </div>
             </div>
-            <div className="pay-detail" style={{ marginTop: 6 }}>
-              <span className="pay-detail-k" style={{ color: "var(--ink-3)" }}>Service fee ({FEE_PERCENT}%)</span>
-              <span className="pay-detail-v" style={{ color: "var(--ink-3)", fontSize: 11 }}>+{feeAmount} USDC</span>
-            </div>
-            <div className="pay-detail" style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--stroke)" }}>
-              <span className="pay-detail-k" style={{ fontWeight: 700, color: "var(--ink-1)" }}>Total you pay</span>
-              <span className="pay-detail-v" style={{ fontWeight: 800, color: "var(--ink-1)" }}>{totalPays} USDC</span>
-            </div>
-          </div>
+          )}
         </div>
 
+        {/* Mode tabs */}
         {mounted && isConnected && (
           <div className="pay-tabs">
             <button className={`pay-tab${payMode === "arc" ? " on" : ""}`} onClick={() => setPayMode("arc")}>
@@ -456,13 +520,20 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
               </div>
             ) : (
               <>
-                <button className="pay-connect-btn" onClick={handleArcPay} disabled={!hasEnough || !paymentTarget} style={(!hasEnough || !paymentTarget) ? { opacity: .3, cursor: "not-allowed" } : {}}>
-                  Pay {totalPays} USDC
+                <button
+                  className="pay-connect-btn"
+                  onClick={handleArcPay}
+                  disabled={!paymentTarget || (isCustomAmount && !amountValid) || (!!effectiveAmount && !hasEnough)}
+                  style={(!paymentTarget || (isCustomAmount && !amountValid) || (!!effectiveAmount && !hasEnough)) ? { opacity: .3, cursor: "not-allowed" } : {}}
+                >
+                  {effectiveAmount && parseFloat(effectiveAmount) > 0 ? `Pay ${totalPays} USDC` : "Enter amount to pay"}
                 </button>
-                <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
-                  2 confirmations — {link.amount} USDC payment + {feeAmount} USDC fee
-                </p>
-                {balance && (
+                {effectiveAmount && parseFloat(effectiveAmount) > 0 && (
+                  <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
+                    2 confirmations — {effectiveAmount} USDC payment + {feeAmount} USDC fee
+                  </p>
+                )}
+                {balance && effectiveAmount && parseFloat(effectiveAmount) > 0 && (
                   <p className={`pay-bal${!hasEnough ? " low" : ""}`}>
                     Balance: <span style={{ color: "var(--ink-2)" }}>{bal.toFixed(4)} USDC</span>
                     {!hasEnough && <> — <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="pay-bal-link">get USDC</a></>}
@@ -483,6 +554,10 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
               </p>
               <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>Use USDC from Base, Ethereum, Arbitrum or other chains. Powered by Circle Unified Balance.</p>
             </div>
+            <div style={{ background: "rgba(245,166,35,.06)", border: "1px solid rgba(245,166,35,.2)", borderRadius: "var(--r-sm)", padding: "10px 13px", marginBottom: 16, display: "flex", alignItems: "flex-start", gap: 8 }}>
+              <IconWarning size={13} color="var(--warning)" />
+              <p style={{ fontSize: 11, color: "var(--warning)", lineHeight: 1.5 }}>Cross-chain payments are routed via Circle Unified Balance. Funds may not appear in the recipient's Arc wallet balance immediately — this is expected on testnet.</p>
+            </div>
             <p style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace", letterSpacing: ".1em", marginBottom: 9 }}>SELECT SOURCE CHAIN</p>
             <div className="chain-grid" style={{ marginBottom: 16 }}>
               {SOURCE_CHAINS.map((chain) => (
@@ -498,7 +573,6 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
               <div className="pay-spin-zone">
                 <div className="pay-spinner" />
                 <p className="pay-spin-text">{unifiedStatusText()}</p>
-                {/* Progress steps */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 12 }}>
                   {["depositing", "spending", "sending_fee"].map((step, i) => {
                     const stepOrder = ["depositing", "spending", "recording", "switching", "sending_fee"];
@@ -519,14 +593,18 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
                     );
                   })}
                 </div>
-                <p style={{ fontSize: 10, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>
-                  {unifiedStep === "switching" ? "Switching to Arc Testnet..." : "Confirm in MetaMask"}
-                </p>
               </div>
             ) : (
               <>
-                <button className="pay-connect-btn" onClick={handleUnifiedPay} style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)" }}>
-                  Pay {formatUSDC(link.amount)} USDC from {chainInfo?.name}
+                <button
+                  className="pay-connect-btn"
+                  onClick={handleUnifiedPay}
+                  disabled={isCustomAmount && !amountValid}
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)", ...(isCustomAmount && !amountValid ? { opacity: .3, cursor: "not-allowed" } : {}) }}
+                >
+                  {effectiveAmount && parseFloat(effectiveAmount) > 0
+                    ? `Pay ${formatUSDC(effectiveAmount)} USDC from ${chainInfo?.name}`
+                    : "Enter amount to pay"}
                 </button>
                 <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", marginTop: 8 }}>3 steps — deposit · route · fee</p>
               </>
@@ -542,22 +620,18 @@ export function PayPage({ link, fee }: { link: PaymentLink; fee?: FeeInfo }) {
           </div>
         )}
       </div>
-      <p className="pay-powered">Powered by Arc Network & Circle</p>
 
+      {/* Create your own CTA */}
       <div style={{ marginTop: 16, padding: "14px 20px", background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-lg)", textAlign: "center", maxWidth: 440, width: "100%" }}>
-        <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10 }}>
-          Want to receive USDC payments like this?
-        </p>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 10 }}>Want to receive USDC payments like this?</p>
         <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "var(--c)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "#000", textDecoration: "none", boxShadow: "0 4px 14px rgba(0,229,160,.3)" }}>
-          <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-            <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
           Create your own payment link
         </a>
-        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>
-          Free · No sign-up · Any chain
-        </p>
+        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 8, fontFamily: "IBM Plex Mono, monospace" }}>Free · No sign-up · Any chain</p>
       </div>
+
+      <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );
 }

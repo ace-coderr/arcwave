@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,14 +14,16 @@ model PaymentLink {
   title             String
   description       String?
   amount            String
+  customAmount      Boolean   @default(false)
+  minAmount         String?
   recipientAddress  String
+  stealthAddress    String?
+  stealthPrivateKey String?
   status            String    @default("ACTIVE")
   txHash            String?
+  forwardTxHash     String?
   paidBy            String?
   paidAt            DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  stealthAddress    String?
-  stealthPrivateKey String?
-  forwardTxHash     String?
 }

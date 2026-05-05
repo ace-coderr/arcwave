@@ -1,37 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { isValidAddress } from "@/lib/utils";
 import { generateStealthWallet } from "@/lib/stealthWallet";
 
 export async function GET(req: NextRequest) {
-  const address = req.nextUrl.searchParams.get("address");
+  const { searchParams } = new URL(req.url);
+  const address = searchParams.get("address");
 
-  if (!address || !isValidAddress(address)) {
-    return NextResponse.json(
-      { error: "A valid wallet address is required." },
-      { status: 400 }
-    );
+  if (!address) {
+    return NextResponse.json({ error: "Address is required." }, { status: 400 });
   }
 
   const links = await db.paymentLink.findMany({
     where: { recipientAddress: address.toLowerCase() },
     orderBy: { createdAt: "desc" },
-    take: 100,
     select: {
       id: true,
       title: true,
       description: true,
       amount: true,
+      customAmount: true,
+      minAmount: true,
       recipientAddress: true,
       stealthAddress: true,
-      forwardTxHash: true,
       status: true,
       txHash: true,
+      forwardTxHash: true,
       paidBy: true,
       paidAt: true,
       createdAt: true,
-      updatedAt: true,
-      // stealthPrivateKey intentionally excluded — never sent to client
     },
   });
 
@@ -46,57 +42,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { title, amount, description, recipientAddress, stealthMode } = body;
+  const {
+    title, amount, description,
+    recipientAddress, stealthMode,
+    customAmount, minAmount,
+  } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
   }
-  if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-    return NextResponse.json({ error: "Amount must be a positive number." }, { status: 400 });
-  }
-  if (!recipientAddress || !isValidAddress(recipientAddress)) {
-    return NextResponse.json({ error: "A valid recipient wallet address is required." }, { status: 400 });
+
+  if (!recipientAddress) {
+    return NextResponse.json({ error: "Recipient address is required." }, { status: 400 });
   }
 
-  try {
-    // Only generate stealth wallet if user explicitly enabled stealth mode
-    let stealthAddress: string | null = null;
-    let stealthPrivateKey: string | null = null;
-
-    if (stealthMode === true) {
-      const stealth = generateStealthWallet();
-      stealthAddress = stealth.address;
-      stealthPrivateKey = stealth.encryptedPrivateKey;
+  if (!customAmount) {
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed <= 0) {
+      return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
     }
-
-    const link = await db.paymentLink.create({
-      data: {
-        title: title.trim(),
-        amount: parseFloat(amount).toString(),
-        description: description?.trim() || null,
-        recipientAddress: recipientAddress.toLowerCase(),
-        stealthAddress,       // null if stealth off
-        stealthPrivateKey,    // null if stealth off
-        status: "ACTIVE",
-      },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        amount: true,
-        recipientAddress: true,
-        stealthAddress: true,
-        status: true,
-        createdAt: true,
-      },
-    });
-
-    return NextResponse.json({ link }, { status: 201 });
-  } catch (err: any) {
-    console.error("DB error:", err);
-    return NextResponse.json(
-      { error: "Database error: " + err.message },
-      { status: 500 }
-    );
   }
+
+  let stealthAddress: string | undefined;
+  let stealthPrivateKey: string | undefined;
+
+  if (stealthMode) {
+    const wallet = generateStealthWallet();
+    stealthAddress = wallet.address;
+    stealthPrivateKey = wallet.encryptedPrivateKey;
+  }
+
+  const link = await db.paymentLink.create({
+    data: {
+      title: title.trim(),
+      description: description?.trim() || null,
+      amount: customAmount ? "0" : parseFloat(amount).toString(),
+      customAmount: !!customAmount,
+      minAmount: customAmount && minAmount ? parseFloat(minAmount).toString() : null,
+      recipientAddress: recipientAddress.toLowerCase(),
+      stealthAddress: stealthAddress ?? null,
+      stealthPrivateKey: stealthPrivateKey ?? null,
+      status: "ACTIVE",
+    },
+  });
+
+  return NextResponse.json({ link }, { status: 201 });
 }
