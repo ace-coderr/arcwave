@@ -165,7 +165,21 @@ export default function AdminPage() {
     earnerMap[addr] = (earnerMap[addr] ?? 0) + parseFloat(l.amount);
   });
   const topEarners = Object.entries(earnerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const recentTx = [...completed].sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime()).slice(0, 10);
+  const escrowReleases = releasedEscrows.map(e => ({
+    id: e.id,
+    title: e.title,
+    amount: e.amount,
+    status: "COMPLETED",
+    recipientAddress: e.sellerAddress,
+    txHash: e.releaseTxHash ?? e.txHash,
+    paidBy: e.buyerAddress,
+    paidAt: e.confirmedAt ?? e.paidAt,
+    createdAt: e.createdAt,
+    isEscrow: true,
+  }));
+  const recentTx = [...completed.map(l => ({ ...l, isEscrow: false })), ...escrowReleases]
+    .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime())
+    .slice(0, 10);
 
   const resolveEscrow = async (escrowId: string, action: "release" | "refund") => {
     setResolvingId(escrowId);
@@ -557,7 +571,12 @@ export default function AdminPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
+                        {(tx as any).isEscrow && (
+                          <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", background: "rgba(91,143,249,.12)", border: "1px solid rgba(91,143,249,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em", flexShrink: 0 }}>ESCROW</span>
+                        )}
+                      </div>
                       {tx.txHash && (
                         <a href={`https://testnet.arcscan.app/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none" }}>
                           {tx.txHash.slice(0, 8)}...↗
