@@ -26,3 +26,25 @@ model PaymentLink {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 }
+
+model EscrowLink {
+  id                String    @id @default(cuid())
+  title             String
+  description       String?
+  amount            String
+  sellerAddress     String
+  buyerAddress      String?
+  stealthAddress    String
+  stealthPrivateKey String
+  status            String    @default("ACTIVE")
+  txHash            String?
+  releaseTxHash     String?
+  feeTxHash         String?
+  paidAt            DateTime?
+  releaseDeadline   DateTime?
+  confirmedAt       DateTime?
+  disputedAt        DateTime?
+  disputeReason     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
