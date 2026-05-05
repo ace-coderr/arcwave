@@ -14,8 +14,6 @@ model PaymentLink {
   title             String
   description       String?
   amount            String
-  customAmount      Boolean   @default(false)
-  minAmount         String?
   recipientAddress  String
   stealthAddress    String?
   stealthPrivateKey String?

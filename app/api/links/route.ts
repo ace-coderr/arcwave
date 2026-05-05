@@ -18,8 +18,6 @@ export async function GET(req: NextRequest) {
       title: true,
       description: true,
       amount: true,
-      customAmount: true,
-      minAmount: true,
       recipientAddress: true,
       stealthAddress: true,
       status: true,
@@ -42,11 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const {
-    title, amount, description,
-    recipientAddress, stealthMode,
-    customAmount, minAmount,
-  } = body;
+  const { title, amount, description, recipientAddress, stealthMode } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -56,11 +50,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Recipient address is required." }, { status: 400 });
   }
 
-  if (!customAmount) {
-    const parsed = parseFloat(amount);
-    if (isNaN(parsed) || parsed <= 0) {
-      return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
-    }
+  const parsed = parseFloat(amount);
+  if (isNaN(parsed) || parsed <= 0) {
+    return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
   }
 
   let stealthAddress: string | undefined;
@@ -76,9 +68,7 @@ export async function POST(req: NextRequest) {
     data: {
       title: title.trim(),
       description: description?.trim() || null,
-      amount: customAmount ? "0" : parseFloat(amount).toString(),
-      customAmount: !!customAmount,
-      minAmount: customAmount && minAmount ? parseFloat(minAmount).toString() : null,
+      amount: parsed.toString(),
       recipientAddress: recipientAddress.toLowerCase(),
       stealthAddress: stealthAddress ?? null,
       stealthPrivateKey: stealthPrivateKey ?? null,

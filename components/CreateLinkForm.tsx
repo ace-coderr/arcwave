@@ -12,10 +12,8 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
   const { address, isConnected } = useAccount();
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [minAmount, setMinAmount] = useState("");
   const [description, setDescription] = useState("");
   const [stealthMode, setStealthMode] = useState(false);
-  const [customAmount, setCustomAmount] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -25,17 +23,8 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
     e.preventDefault();
     if (!isConnected || !address) { setError("Connect your wallet first."); return; }
     if (!title.trim()) { setError("Title is required."); return; }
-
-    if (!customAmount) {
-      const parsed = parseFloat(amount);
-      if (isNaN(parsed) || parsed <= 0) { setError("Enter a valid amount greater than 0."); return; }
-    }
-
-    if (customAmount && minAmount) {
-      const parsedMin = parseFloat(minAmount);
-      if (isNaN(parsedMin) || parsedMin < 0) { setError("Enter a valid minimum amount."); return; }
-    }
-
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || parsed <= 0) { setError("Enter a valid amount greater than 0."); return; }
     setIsLoading(true);
     setError("");
     try {
@@ -44,9 +33,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
-          amount: customAmount ? "0" : parseFloat(amount).toString(),
-          minAmount: customAmount && minAmount ? parseFloat(minAmount).toString() : undefined,
-          customAmount,
+          amount: parsed.toString(),
           description: description.trim() || undefined,
           recipientAddress: address,
           stealthMode,
@@ -55,8 +42,7 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { link } = await res.json();
       setCreatedLink(getPaymentUrl(link.id));
-      setTitle(""); setAmount(""); setMinAmount(""); setDescription("");
-      setCustomAmount(false); setStealthMode(false);
+      setTitle(""); setAmount(""); setDescription(""); setStealthMode(false);
       onLinkCreated();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
@@ -112,58 +98,19 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
         ) : (
           <form onSubmit={handleSubmit}>
 
-            {/* Title */}
             <div className="form-group">
               <label className="form-label">Title</label>
               <input type="text" className="input" placeholder="e.g. Freelance Invoice #102" value={title} onChange={e => setTitle(e.target.value)} maxLength={80} required disabled={!isConnected}/>
             </div>
 
-            {/* Custom amount toggle */}
-            <div className="stealth-toggle-row" style={{ marginBottom: 12 }}>
-              <div className="stealth-toggle-info">
-                <div className="stealth-toggle-label">
-                  <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.3"/>
-                    <path d="M8 5v3l2 1.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                  </svg>
-                  Custom Amount
-                </div>
-                <div className="stealth-toggle-desc">
-                  {customAmount
-                    ? "Payer enters their own amount — great for tips and donations"
-                    : "You set a fixed amount the payer must pay"}
-                </div>
+            <div className="form-group">
+              <label className="form-label">Amount</label>
+              <div className="form-input-wrap">
+                <input type="number" className="input mono" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} min="0.000001" step="any" required disabled={!isConnected} style={{ paddingRight: 52 }}/>
+                <span className="form-input-suffix">USDC</span>
               </div>
-              <button type="button" onClick={() => { setCustomAmount(!customAmount); setAmount(""); }} disabled={!isConnected} className={`toggle-switch${customAmount ? " on" : ""}`} aria-label="Toggle custom amount">
-                <span className="toggle-knob"/>
-              </button>
             </div>
 
-            {/* Amount field — fixed or minimum */}
-            {!customAmount ? (
-              <div className="form-group">
-                <label className="form-label">Amount</label>
-                <div className="form-input-wrap">
-                  <input type="number" className="input mono" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} min="0.000001" step="any" required disabled={!isConnected} style={{ paddingRight: 52 }}/>
-                  <span className="form-input-suffix">USDC</span>
-                </div>
-              </div>
-            ) : (
-              <div className="form-group">
-                <label className="form-label">
-                  Minimum Amount <span className="form-label-opt">(optional)</span>
-                </label>
-                <div className="form-input-wrap">
-                  <input type="number" className="input mono" placeholder="0.00 — no minimum" value={minAmount} onChange={e => setMinAmount(e.target.value)} min="0" step="any" disabled={!isConnected} style={{ paddingRight: 52 }}/>
-                  <span className="form-input-suffix">USDC</span>
-                </div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.5 }}>
-                  Payer can send any amount above this minimum. Leave blank for no minimum.
-                </div>
-              </div>
-            )}
-
-            {/* Description */}
             <div className="form-group">
               <label className="form-label">
                 Description <span className="form-label-optional">(optional)</span>
