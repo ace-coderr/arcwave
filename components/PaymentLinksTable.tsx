@@ -17,6 +17,7 @@ interface PaymentLink {
   forwardTxHash?: string;
   createdAt: string;
   paidAt?: string;
+  isEscrow?: boolean;
 }
 
 type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "EXPIRED";
@@ -234,6 +235,9 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
                 <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }}/>
                 <span className="table-cell-title-text">{link.title}</span>
                 {link.stealthAddress && <span className="stealth-badge">🔒 stealth</span>}
+                {(link as any).isEscrow && (
+                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", background: "rgba(91,143,249,.12)", border: "1px solid rgba(91,143,249,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em" }}>ESCROW</span>
+                )}
                 {link.expiresAt && link.status === "ACTIVE" && (
                   <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: 4, padding: "1px 5px" }}>
                     exp

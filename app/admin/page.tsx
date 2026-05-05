@@ -75,6 +75,8 @@ export default function AdminPage() {
   const [feeBalance, setFeeBalance] = useState<string | null>(null);
   const [range, setRange] = useState<"7d" | "30d" | "all">("30d");
   const [escrowTab, setEscrowTab] = useState<"all" | "disputed" | "holding">("disputed");
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [resolveMsg, setResolveMsg] = useState<Record<string, string>>({});
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -164,6 +166,29 @@ export default function AdminPage() {
   });
   const topEarners = Object.entries(earnerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const recentTx = [...completed].sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime()).slice(0, 10);
+
+  const resolveEscrow = async (escrowId: string, action: "release" | "refund") => {
+    setResolvingId(escrowId);
+    try {
+      const endpoint = action === "release" ? "/api/escrow/release" : `/api/escrow/refund?wallet=${address}`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ escrowId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setResolveMsg(prev => ({ ...prev, [escrowId]: action === "release" ? "✓ Released to seller" : "✓ Refunded to buyer" }));
+        fetchAll();
+      } else {
+        setResolveMsg(prev => ({ ...prev, [escrowId]: `Error: ${data.error}` }));
+      }
+    } catch {
+      setResolveMsg(prev => ({ ...prev, [escrowId]: "Network error" }));
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   const escrowStatusColor = (s: string) => ({ ACTIVE: "#f5a623", HOLDING: "#5b8ff9", CONFIRMED: "#00E5A0", RELEASED: "#00E5A0", DISPUTED: "#f03e5f", CANCELLED: "#666" }[s] ?? "#666");
 
@@ -386,6 +411,31 @@ export default function AdminPage() {
                     <span style={{ fontSize: 11, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-2)" }}>{e.sellerAddress.slice(0, 6)}...{e.sellerAddress.slice(-4)}</span>
                     <span style={{ fontSize: 11, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)" }}>{e.buyerAddress ? `${e.buyerAddress.slice(0, 6)}...${e.buyerAddress.slice(-4)}` : "—"}</span>
                     <span style={{ fontSize: 10, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)" }}>{fmtDate(e.createdAt)}</span>
+                    {/* Dispute resolution buttons */}
+                    {e.status === "DISPUTED" && (
+                      <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8, paddingTop: 8, borderTop: "1px solid rgba(240,62,95,.15)", marginTop: 4 }}>
+                        {resolveMsg[e.id] ? (
+                          <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>{resolveMsg[e.id]}</span>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => resolveEscrow(e.id, "release")}
+                              disabled={resolvingId === e.id}
+                              style={{ padding: "6px 14px", background: "var(--c)", border: "none", borderRadius: "var(--r-sm)", color: "#000", fontSize: 11, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}
+                            >
+                              {resolvingId === e.id ? "..." : "✓ Release to Seller"}
+                            </button>
+                            <button
+                              onClick={() => resolveEscrow(e.id, "refund")}
+                              disabled={resolvingId === e.id}
+                              style={{ padding: "6px 14px", background: "transparent", border: "1px solid var(--danger)", borderRadius: "var(--r-sm)", color: "var(--danger)", fontSize: 11, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}
+                            >
+                              {resolvingId === e.id ? "..." : "↩ Refund Buyer"}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -496,7 +546,9 @@ export default function AdminPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
+                      </div>
                       {tx.txHash && (
                         <a href={`https://testnet.arcscan.app/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none" }}>
                           {tx.txHash.slice(0, 8)}...↗
