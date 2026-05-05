@@ -30,6 +30,7 @@ interface PaymentLink {
   title: string;
   description?: string;
   amount: string;
+  expiresAt?: string;
   stealthAddress?: string | null;
   recipientAddress?: string;
   status: string;

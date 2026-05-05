@@ -12,6 +12,7 @@ interface PaymentLink {
   recipientAddress: string;
   stealthAddress?: string;
   status: string;
+  expiresAt?: string;
   txHash?: string;
   forwardTxHash?: string;
   createdAt: string;
@@ -22,6 +23,49 @@ type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "EXPIRED";
 
 function shortenAddr(a: string) {
   return `${a.slice(0, 6)}...${a.slice(-4)}`;
+}
+
+function Countdown({ expiresAt }: { expiresAt: string }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const diff = new Date(expiresAt).getTime() - Date.now();
+      if (diff <= 0) { setTimeLeft("Expired"); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      if (d > 0) setTimeLeft(`${d}d ${h}h`);
+      else if (h > 0) setTimeLeft(`${h}h ${m}m`);
+      else setTimeLeft(`${m}m`);
+    };
+    update();
+    const id = setInterval(update, 60000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  const isUrgent = diff > 0 && diff < 3600000; // less than 1 hour
+  const isWarning = diff > 0 && diff < 86400000; // less than 1 day
+
+  return (
+    <span style={{
+      fontSize: 9,
+      fontFamily: "IBM Plex Mono, monospace",
+      fontWeight: 700,
+      color: isUrgent ? "var(--danger)" : isWarning ? "var(--warning)" : "var(--ink-3)",
+      display: "flex",
+      alignItems: "center",
+      gap: 3,
+      marginTop: 3,
+    }}>
+      <svg viewBox="0 0 12 12" fill="none" width="9" height="9">
+        <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M6 3.5v2.8l1.2.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+      </svg>
+      {timeLeft}
+    </span>
+  );
 }
 
 interface Props { refreshTrigger: number; }
@@ -82,9 +126,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
     const rows = [
       ["Title", "Amount (USDC)", "Status", "Created", "Paid At", "TX Hash"],
       ...completed.map((l) => [
-        l.title,
-        l.amount,
-        l.status,
+        l.title, l.amount, l.status,
         formatDate(l.createdAt),
         l.paidAt ? formatDate(l.paidAt) : "",
         l.txHash ?? "",
@@ -94,9 +136,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = "conduit-payments.csv";
-    a.click();
+    a.href = url; a.download = "conduit-payments.csv"; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -108,17 +148,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
     EXPIRED: links.filter((l) => l.status === "EXPIRED").length,
   };
 
-  const statusColor = (s: string) => ({
-    COMPLETED: "#00E5A0",
-    ACTIVE: "#f5a623",
-    EXPIRED: "#f03e5f",
-  }[s] ?? "#666");
-
-  const statusClass = (s: string) => ({
-    COMPLETED: "status-green",
-    ACTIVE: "status-yellow",
-    EXPIRED: "status-red",
-  }[s] ?? "status-red");
+  const statusColor = (s: string) => ({ COMPLETED: "#00E5A0", ACTIVE: "#f5a623", EXPIRED: "#f03e5f" }[s] ?? "#666");
+  const statusClass = (s: string) => ({ COMPLETED: "status-green", ACTIVE: "status-yellow", EXPIRED: "status-red" }[s] ?? "status-red");
 
   return (
     <div className="table-card">
@@ -130,22 +161,10 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         </div>
         <div className="table-header-right">
           {(["ALL", "ACTIVE", "COMPLETED", "EXPIRED"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              className={`filter-pill${filter === f ? " active" : ""}`}
-              onClick={() => setFilter(f)}
-            >
-              {f}
-            </button>
+            <button key={f} className={`filter-pill${filter === f ? " active" : ""}`} onClick={() => setFilter(f)}>{f}</button>
           ))}
           <button className="table-refresh-btn" onClick={fetchLinks} title="Refresh">↻</button>
-          <button
-            className="table-export-btn"
-            onClick={exportCSV}
-            disabled={counts.COMPLETED === 0}
-          >
-            Export CSV
-          </button>
+          <button className="table-export-btn" onClick={exportCSV} disabled={counts.COMPLETED === 0}>Export CSV</button>
         </div>
       </div>
 
@@ -158,23 +177,21 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         </div>
       )}
 
-      {/* Scrollable rows container */}
+      {/* Scrollable rows */}
       <div style={{ overflowY: "auto", maxHeight: 480, flex: 1 }}>
 
-        {/* Loading */}
         {(!mounted || isLoading) && (
           <div className="loading-center" style={{ height: 160 }}>
-            <div className="page-spinner" />
+            <div className="page-spinner"/>
           </div>
         )}
 
-        {/* Not connected */}
         {mounted && !isConnected && !isLoading && (
           <div className="table-not-connected">
             <div className="table-not-connected-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5" />
-                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
+                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
             <p className="table-not-connected-text">Wallet not connected</p>
@@ -182,61 +199,54 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           </div>
         )}
 
-        {/* Empty */}
         {mounted && isConnected && !isLoading && filtered.length === 0 && (
           <div className="table-empty">
             <div className="table-empty-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </div>
-            <p className="table-empty-title">
-              {filter === "ALL" ? "No payment links yet" : `No ${filter.toLowerCase()} links`}
-            </p>
-            <p className="table-empty-sub">
-              {filter === "ALL" ? "Create your first payment link above" : "Try a different filter"}
-            </p>
+            <p className="table-empty-title">{filter === "ALL" ? "No payment links yet" : `No ${filter.toLowerCase()} links`}</p>
+            <p className="table-empty-sub">{filter === "ALL" ? "Create your first payment link above" : "Try a different filter"}</p>
           </div>
         )}
 
-        {/* Skeleton */}
         {mounted && isConnected && isLoading && (
           <>
             {[1, 2, 3].map((i) => (
               <div key={i} className="table-skeleton-row">
-                <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }} /><div className="skeleton" style={{ width: "40%", height: 10 }} /></div>
-                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
-                <div className="skeleton" style={{ width: 70, height: 14 }} />
-                <div className="skeleton" style={{ width: 80, height: 12 }} />
-                <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /></div>
+                <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }}/><div className="skeleton" style={{ width: "40%", height: 10 }}/></div>
+                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }}/>
+                <div className="skeleton" style={{ width: 70, height: 14 }}/>
+                <div className="skeleton" style={{ width: 80, height: 12 }}/>
+                <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }}/><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }}/></div>
               </div>
             ))}
           </>
         )}
 
-        {/* Rows */}
         {mounted && !isLoading && filtered.map((link) => (
           <div key={link.id} className="table-row">
             {/* Title */}
             <div className="table-cell-title">
               <div className="table-cell-title-name">
-                <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }} />
+                <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }}/>
                 <span className="table-cell-title-text">{link.title}</span>
-                {link.stealthAddress && (
-                  <span className="stealth-badge">🔒 stealth</span>
+                {link.stealthAddress && <span className="stealth-badge">🔒 stealth</span>}
+                {link.expiresAt && link.status === "ACTIVE" && (
+                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: 4, padding: "1px 5px" }}>
+                    exp
+                  </span>
                 )}
               </div>
-              {link.description && (
-                <p className="table-cell-description">{link.description}</p>
+              {link.description && <p className="table-cell-description">{link.description}</p>}
+              {/* Expiry countdown */}
+              {link.expiresAt && link.status === "ACTIVE" && (
+                <Countdown expiresAt={link.expiresAt}/>
               )}
               {link.txHash && (
-                <a
-                  href={`https://testnet.arcscan.app/tx/${link.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="table-cell-txhash"
-                >
+                <a href={`https://testnet.arcscan.app/tx/${link.txHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">
                   {shortenAddr(link.txHash)} ↗
                 </a>
               )}
@@ -245,22 +255,22 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
             {/* Status */}
             <div>
               <span className={`status-badge ${statusClass(link.status)}`}>
-                <span className="status-badge-dot" />
+                <span className="status-badge-dot"/>
                 {link.status}
               </span>
               {link.status === "COMPLETED" && (
+                <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, fontFamily: "IBM Plex Mono, monospace" }}>Paid ✓</p>
+              )}
+              {link.status === "EXPIRED" && link.expiresAt && (
                 <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, fontFamily: "IBM Plex Mono, monospace" }}>
-                  Paid ✓
+                  {new Date(link.expiresAt).toLocaleDateString("en", { month: "short", day: "numeric" })}
                 </p>
               )}
             </div>
 
             {/* Amount */}
             <div>
-              <span className="table-amount">
-                {formatUSDC(link.amount)}
-                <span className="table-amount-unit">USDC</span>
-              </span>
+              <span className="table-amount">{formatUSDC(link.amount)}<span className="table-amount-unit">USDC</span></span>
             </div>
 
             {/* Date */}
@@ -268,19 +278,11 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
 
             {/* Actions */}
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <button
-                className={`table-copy-btn${copiedId === link.id ? " copied" : ""}`}
-                onClick={() => copyLink(link.id)}
-                disabled={link.status !== "ACTIVE"}
-              >
+              <button className={`table-copy-btn${copiedId === link.id ? " copied" : ""}`} onClick={() => copyLink(link.id)} disabled={link.status !== "ACTIVE"}>
                 {copiedId === link.id ? "Copied!" : "Copy Link"}
               </button>
               {link.status === "ACTIVE" && (
-                <button
-                  className="table-cancel-btn"
-                  onClick={() => cancelLink(link.id)}
-                  disabled={cancellingId === link.id}
-                >
+                <button className="table-cancel-btn" onClick={() => cancelLink(link.id)} disabled={cancellingId === link.id}>
                   {cancellingId === link.id ? "..." : "Cancel"}
                 </button>
               )}

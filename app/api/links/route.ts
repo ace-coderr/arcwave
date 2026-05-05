@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
       recipientAddress: true,
       stealthAddress: true,
       status: true,
+      expiresAt: true,
       txHash: true,
       forwardTxHash: true,
       paidBy: true,
@@ -28,6 +29,21 @@ export async function GET(req: NextRequest) {
       createdAt: true,
     },
   });
+
+  // Auto-expire links that have passed their expiry date
+  const now = new Date();
+  const toExpire = links.filter(
+    l => l.status === "ACTIVE" && l.expiresAt && new Date(l.expiresAt) <= now
+  );
+
+  if (toExpire.length > 0) {
+    await db.paymentLink.updateMany({
+      where: { id: { in: toExpire.map(l => l.id) } },
+      data: { status: "EXPIRED" },
+    });
+    // Update in-memory
+    toExpire.forEach(l => { l.status = "EXPIRED"; });
+  }
 
   return NextResponse.json({ links });
 }
@@ -40,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { title, amount, description, recipientAddress, stealthMode } = body;
+  const { title, amount, description, recipientAddress, stealthMode, expiresAt } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -53,6 +69,10 @@ export async function POST(req: NextRequest) {
   const parsed = parseFloat(amount);
   if (isNaN(parsed) || parsed <= 0) {
     return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
+  }
+
+  if (expiresAt && new Date(expiresAt) <= new Date()) {
+    return NextResponse.json({ error: "Expiry date must be in the future." }, { status: 400 });
   }
 
   let stealthAddress: string | undefined;
@@ -73,6 +93,7 @@ export async function POST(req: NextRequest) {
       stealthAddress: stealthAddress ?? null,
       stealthPrivateKey: stealthPrivateKey ?? null,
       status: "ACTIVE",
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
     },
   });
 

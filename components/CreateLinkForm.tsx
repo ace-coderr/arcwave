@@ -14,10 +14,14 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [stealthMode, setStealthMode] = useState(false);
+  const [expiresAt, setExpiresAt] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Min datetime = now (can't set expiry in the past)
+  const minDateTime = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +29,9 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
     if (!title.trim()) { setError("Title is required."); return; }
     const parsed = parseFloat(amount);
     if (isNaN(parsed) || parsed <= 0) { setError("Enter a valid amount greater than 0."); return; }
+    if (expiresAt && new Date(expiresAt) <= new Date()) {
+      setError("Expiry date must be in the future."); return;
+    }
     setIsLoading(true);
     setError("");
     try {
@@ -37,12 +44,14 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
           description: description.trim() || undefined,
           recipientAddress: address,
           stealthMode,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { link } = await res.json();
       setCreatedLink(getPaymentUrl(link.id));
-      setTitle(""); setAmount(""); setDescription(""); setStealthMode(false);
+      setTitle(""); setAmount(""); setDescription("");
+      setStealthMode(false); setExpiresAt("");
       onLinkCreated();
     } catch (err: any) {
       setError(err.message ?? "Something went wrong.");
@@ -116,6 +125,34 @@ export function CreateLinkForm({ onLinkCreated }: CreateLinkFormProps) {
                 Description <span className="form-label-optional">(optional)</span>
               </label>
               <input type="text" className="input" placeholder="e.g. Logo design for Acme Corp" value={description} onChange={e => setDescription(e.target.value)} maxLength={200} disabled={!isConnected}/>
+            </div>
+
+            {/* Expiry date */}
+            <div className="form-group">
+              <label className="form-label">
+                Expiry Date <span className="form-label-optional">(optional)</span>
+              </label>
+              <div className="form-input-wrap">
+                <input
+                  type="datetime-local"
+                  className="input mono"
+                  value={expiresAt}
+                  onChange={e => setExpiresAt(e.target.value)}
+                  min={minDateTime}
+                  disabled={!isConnected}
+                  style={{ paddingRight: 12, colorScheme: "dark" }}
+                />
+              </div>
+              {expiresAt && (
+                <div style={{ fontSize: 11, color: "var(--warning)", marginTop: 6, display: "flex", alignItems: "center", gap: 5 }}>
+                  <svg viewBox="0 0 14 14" fill="none" width="11" height="11">
+                    <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+                    <path d="M7 4.5v2.8l1.5 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
+                  Expires {new Date(expiresAt).toLocaleString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  <button type="button" onClick={() => setExpiresAt("")} style={{ marginLeft: 4, fontSize: 10, color: "var(--ink-3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ clear</button>
+                </div>
+              )}
             </div>
 
             {/* Stealth Mode Toggle */}

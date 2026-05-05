@@ -16,6 +16,15 @@ export default async function PayPageRoute({ params }: PageProps) {
   const link = await db.paymentLink.findUnique({ where: { id: params.linkId } });
   if (!link) return notFound();
 
+  // Auto-expire if past expiry date
+  if (link.status === "ACTIVE" && link.expiresAt && new Date(link.expiresAt) <= new Date()) {
+    await db.paymentLink.update({
+      where: { id: link.id },
+      data: { status: "EXPIRED" },
+    });
+    link.status = "EXPIRED";
+  }
+
   const feeInfo = calculateFee(link.amount);
 
   return (
@@ -25,6 +34,7 @@ export default async function PayPageRoute({ params }: PageProps) {
         title: link.title,
         description: link.description ?? undefined,
         amount: link.amount,
+        expiresAt: link.expiresAt?.toISOString() ?? undefined,
         stealthAddress: link.stealthAddress ?? null,
         recipientAddress: link.recipientAddress,
         status: link.status,
