@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
 import { parseEther, formatEther } from "viem";
+import { sendPaymentReceivedEmail, sendLinkCancelledEmail } from "@/lib/email";
 
 interface RouteParams { params: { linkId: string } }
 
@@ -15,6 +16,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       amount: true,
       stealthAddress: true,
       status: true,
+      expiresAt: true,
       txHash: true,
       forwardTxHash: true,
       createdAt: true,
@@ -42,10 +44,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const isUnified = paymentType === "unified";
 
   if (!txHash) {
-    return NextResponse.json(
-      { error: "A transaction hash is required." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "A transaction hash is required." }, { status: 400 });
   }
 
   const link = await db.paymentLink.findUnique({
@@ -56,6 +55,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       amount: true,
       recipientAddress: true,
       stealthAddress: true,
+      notifyEmail: true,
       status: true,
       txHash: true,
     },
@@ -76,13 +76,10 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const isStealthLink = !!link.stealthAddress;
   let verificationPassed = false;
 
-  // Skip on-chain verification for unified payments —
-  // the tx goes through Circle's Gateway contract, not directly to recipient
   if (isUnified) {
     console.log(`[PATCH] Unified payment — skipping Arc verification`);
     verificationPassed = true;
   } else {
-    // Standard Arc payment — verify on-chain
     try {
       const expectedPaymentAddress = isStealthLink
         ? link.stealthAddress!.toLowerCase()
@@ -94,14 +91,12 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
       if (tx && tx.blockNumber) {
         const txTo = tx.to?.toLowerCase();
-
         if (txTo !== expectedPaymentAddress) {
           return NextResponse.json(
             { error: `Transaction sent to wrong address. Expected ${expectedPaymentAddress}, got ${txTo}.` },
             { status: 400 }
           );
         }
-
         const requiredWei = parseEther(link.amount);
         if (tx.value < requiredWei) {
           const sentUsdc = parseFloat(formatEther(tx.value)).toFixed(4);
@@ -135,6 +130,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   console.log(`[PATCH] Marked COMPLETED. isStealthLink=${isStealthLink} isUnified=${isUnified}`);
 
+  // Send payment received notification
+  if (link.notifyEmail) {
+    sendPaymentReceivedEmail({
+      to: link.notifyEmail,
+      title: link.title,
+      amount: link.amount,
+      txHash,
+      paidBy: paidBy ?? undefined,
+      linkId: link.id,
+    }).catch(console.error);
+  }
+
   return NextResponse.json({
     success: true,
     link: {
@@ -161,9 +168,20 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   if (link.status === "COMPLETED") {
     return NextResponse.json({ error: "Cannot cancel a completed payment." }, { status: 409 });
   }
+
   const updated = await db.paymentLink.update({
     where: { id: params.linkId },
     data: { status: "EXPIRED" },
   });
+
+  // Send cancellation notification
+  if (link.notifyEmail) {
+    sendLinkCancelledEmail({
+      to: link.notifyEmail,
+      title: link.title,
+      amount: link.amount,
+    }).catch(console.error);
+  }
+
   return NextResponse.json({ success: true, link: updated });
 }

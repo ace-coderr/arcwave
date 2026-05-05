@@ -19,6 +19,7 @@ model PaymentLink {
   stealthPrivateKey String?
   status            String    @default("ACTIVE")
   expiresAt         DateTime?
+  notifyEmail       String?
   txHash            String?
   forwardTxHash     String?
   paidBy            String?
