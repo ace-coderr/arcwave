@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true, title: true, description: true, amount: true,
-      sellerAddress: true, buyerAddress: true, stealthAddress: true,
+      sellerAddress: true, sellerContact: true, buyerAddress: true, stealthAddress: true,
       status: true, txHash: true, releaseTxHash: true,
       paidAt: true, releaseDeadline: true, confirmedAt: true,
       disputedAt: true, disputeReason: true, createdAt: true,
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
 
-  const { title, description, amount, sellerAddress } = body;
+  const { title, description, amount, sellerAddress, sellerContact } = body;
   if (!title?.trim()) return NextResponse.json({ error: "Title is required." }, { status: 400 });
   if (!sellerAddress) return NextResponse.json({ error: "Seller address is required." }, { status: 400 });
   const parsed = parseFloat(amount);
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       description: description?.trim() || null,
       amount: parsed.toString(),
       sellerAddress: sellerAddress.toLowerCase(),
+      sellerContact: sellerContact?.trim() || null,
       stealthAddress: wallet.address,
       stealthPrivateKey: wallet.encryptedPrivateKey,
       status: "ACTIVE",

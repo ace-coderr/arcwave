@@ -26,6 +26,7 @@ interface EscrowData {
   amount: string;
   sellerAddress: string;
   stealthAddress: string;
+  sellerContact?: string;
   status: string;
   txHash?: string;
   paidAt?: string;
@@ -245,10 +246,32 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
           </div>
           <p style={{ fontSize: 20, fontWeight: 800, color: "var(--ink-1)", marginBottom: 8 }}>Funds Held in Escrow</p>
           <p style={{ fontSize: 14, color: "#5b8ff9", fontWeight: 700, fontFamily: "IBM Plex Mono, monospace", marginBottom: 4 }}>{escrow.amount} USDC</p>
-          <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 20, lineHeight: 1.6 }}>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 16, lineHeight: 1.6 }}>
             Payment is secured. Once you receive your order, confirm receipt to release funds to the seller.
           </p>
-          {localDeadline && <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 20 }}><Countdown deadline={localDeadline}/></p>}
+
+          {/* Seller contact */}
+          {escrow.sellerContact && (
+            <div style={{ background: "rgba(91,143,249,.08)", border: "1px solid rgba(91,143,249,.2)", borderRadius: "var(--r-sm)", padding: "12px 14px", marginBottom: 16, textAlign: "left" }}>
+              <p style={{ fontSize: 10, color: "#5b8ff9", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, marginBottom: 6, letterSpacing: ".08em" }}>CONTACT SELLER FOR DELIVERY</p>
+              <p style={{ fontSize: 13, color: "var(--ink-1)", fontWeight: 700 }}>{escrow.sellerContact}</p>
+              <p style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>Reach out to arrange delivery of your order.</p>
+            </div>
+          )}
+
+          {/* Save link notice */}
+          <div style={{ background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", padding: "10px 14px", marginBottom: 16, textAlign: "left", display: "flex", gap: 8 }}>
+            <svg viewBox="0 0 16 16" fill="none" width="13" height="13" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="8" cy="8" r="6" stroke="var(--ink-3)" strokeWidth="1.2"/>
+              <path d="M8 5v3l2 1.5" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <p style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 600, marginBottom: 3 }}>You can close this page</p>
+              <p style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5 }}>Bookmark this URL or save it. Come back anytime to confirm receipt or raise a dispute.</p>
+            </div>
+          </div>
+
+          {localDeadline && <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 16 }}><Countdown deadline={localDeadline}/></p>}
 
           {/* Confirm receipt button */}
           {!showDisputeForm && (
@@ -338,6 +361,12 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
             <span className="pay-detail-k">Auto-release</span>
             <span className="pay-detail-v" style={{ fontSize: 11, color: "var(--ink-3)" }}>7 days after payment</span>
           </div>
+          {escrow.sellerContact && (
+            <div className="pay-detail">
+              <span className="pay-detail-k">Seller contact</span>
+              <span className="pay-detail-v" style={{ fontSize: 11, color: "#5b8ff9", fontWeight: 600 }}>{escrow.sellerContact}</span>
+            </div>
+          )}
           <div style={{ marginTop: 4, paddingTop: 10, borderTop: "1px dashed var(--stroke)" }}>
             <div className="pay-detail">
               <span className="pay-detail-k">Escrow amount</span>

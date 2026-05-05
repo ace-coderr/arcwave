@@ -33,6 +33,7 @@ model EscrowLink {
   description       String?
   amount            String
   sellerAddress     String
+  sellerContact     String?
   buyerAddress      String?
   stealthAddress    String
   stealthPrivateKey String

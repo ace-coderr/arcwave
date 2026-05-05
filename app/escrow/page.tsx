@@ -58,6 +58,7 @@ export default function EscrowPage() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [sellerContact, setSellerContact] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -92,13 +93,13 @@ export default function EscrowPage() {
       const res = await fetch("/api/escrow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), amount: parsed.toString(), description: description.trim() || undefined, sellerAddress: address }),
+        body: JSON.stringify({ title: title.trim(), amount: parsed.toString(), description: description.trim() || undefined, sellerAddress: address, sellerContact: sellerContact.trim() || undefined }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { escrow } = await res.json();
       const url = `${window.location.origin}/escrow/${escrow.id}`;
       setCreatedLink(url);
-      setTitle(""); setAmount(""); setDescription("");
+      setTitle(""); setAmount(""); setDescription(""); setSellerContact("");
       fetchEscrows();
     } catch (err: any) {
       setCreateError(err.message ?? "Something went wrong.");
@@ -218,6 +219,11 @@ export default function EscrowPage() {
                   <div className="form-group">
                     <label className="form-label">Description <span className="form-label-optional">(optional)</span></label>
                     <input type="text" className="input" placeholder="e.g. Item details, delivery terms..." value={description} onChange={e => setDescription(e.target.value)} maxLength={200}/>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Your Contact <span className="form-label-optional">(optional)</span></label>
+                    <input type="text" className="input" placeholder="e.g. @ace_must_win on Telegram, +234..." value={sellerContact} onChange={e => setSellerContact(e.target.value)} maxLength={100}/>
+                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>Shown to buyer after payment so they can reach you for delivery</div>
                   </div>
                   <div className="stealth-info-box" style={{ marginBottom: 16 }}>
                     <svg viewBox="0 0 16 16" fill="none" width="14" height="14" style={{ flexShrink: 0, marginTop: 1 }}>

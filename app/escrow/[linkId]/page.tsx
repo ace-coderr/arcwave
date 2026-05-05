@@ -22,7 +22,6 @@ export default async function EscrowBuyerPage({ params }: PageProps) {
       data: { status: "CONFIRMED", confirmedAt: new Date() },
     });
     escrow.status = "CONFIRMED";
-    // Trigger release
     fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"}/api/escrow/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -38,6 +37,7 @@ export default async function EscrowBuyerPage({ params }: PageProps) {
         description: escrow.description ?? undefined,
         amount: escrow.amount,
         sellerAddress: escrow.sellerAddress,
+        sellerContact: escrow.sellerContact ?? undefined,
         stealthAddress: escrow.stealthAddress,
         status: escrow.status,
         txHash: escrow.txHash ?? undefined,
