@@ -38,7 +38,7 @@ interface EscrowData {
 function Logo() {
   return (
     <div className="pay-logo">
-      <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, width: "auto", objectFit: "contain" }}/>
+      <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, width: "auto", objectFit: "contain" }} />
     </div>
   );
 }
@@ -190,11 +190,11 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
 
   // Cancelled
   if (localStatus === "CANCELLED") return (
-    <div className="pay-page"><Logo/><p className="pay-tagline">ESCROW</p>
-      <div className="pay-card"><div className="pay-card-bar"/>
+    <div className="pay-page"><Logo /><p className="pay-tagline">ESCROW</p>
+      <div className="pay-card"><div className="pay-card-bar" />
         <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
           <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(240,62,95,.1)", border: "1.5px solid rgba(240,62,95,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><circle cx="12" cy="12" r="10" stroke="var(--danger)" strokeWidth="1.5"/><path d="M8 8l8 8M16 8l-8 8" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><circle cx="12" cy="12" r="10" stroke="var(--danger)" strokeWidth="1.5" /><path d="M8 8l8 8M16 8l-8 8" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" /></svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Escrow Cancelled</p>
           <p style={{ fontSize: 13, color: "var(--ink-2)" }}>This escrow has been cancelled by the seller.</p>
@@ -206,13 +206,19 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
 
   // Confirmed / Released
   if (["CONFIRMED", "RELEASED"].includes(localStatus) && payStep !== "done") return (
-    <div className="pay-page"><Logo/><p className="pay-tagline">ESCROW</p>
-      <div className="pay-card"><div className="pay-card-bar"/>
+    <div className="pay-page"><Logo /><p className="pay-tagline">ESCROW</p>
+      <div className="pay-card"><div className="pay-card-bar" />
         <div className="pay-actions" style={{ textAlign: "center" }}>
-          <div className="pay-success-icon"><svg viewBox="0 0 24 24" fill="none" width="28" height="28"><path d="M5 12l4.5 4.5L19 7" stroke="var(--c)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+          <div className="pay-success-icon"><svg viewBox="0 0 24 24" fill="none" width="28" height="28"><path d="M5 12l4.5 4.5L19 7" stroke="var(--c)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
           <p className="pay-success-title">Receipt Confirmed!</p>
           <p className="pay-success-desc">Funds have been released to the seller.</p>
           <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 14 }}>Transaction complete.</p>
+          <a
+            href="/"
+            style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 20px", background: "var(--c)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "#000", textDecoration: "none", boxShadow: "0 4px 14px rgba(0,229,160,.3)", marginTop: 8 }}
+          >
+            Go to Dashboard →
+          </a>
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -221,15 +227,21 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
 
   // Disputed
   if (localStatus === "DISPUTED") return (
-    <div className="pay-page"><Logo/><p className="pay-tagline">ESCROW</p>
-      <div className="pay-card"><div className="pay-card-bar"/>
+    <div className="pay-page"><Logo /><p className="pay-tagline">ESCROW</p>
+      <div className="pay-card"><div className="pay-card-bar" />
         <div className="pay-actions" style={{ textAlign: "center", padding: "36px 28px" }}>
           <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(240,62,95,.1)", border: "1.5px solid rgba(240,62,95,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Dispute Raised</p>
           <p style={{ fontSize: 13, color: "var(--ink-2)" }}>Your dispute has been submitted. Admin will review and resolve within 24 hours.</p>
           <p style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 12, fontFamily: "IBM Plex Mono, monospace" }}>Funds are frozen pending resolution.</p>
+          <a
+            href="/"
+            style={{ display: "inline-block", marginTop: 16, fontSize: 13, color: "var(--ink-3)", textDecoration: "none", fontWeight: 600 }}
+          >
+            ← Back to Conduit
+          </a>
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -238,11 +250,11 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
 
   // Success after payment
   if (payStep === "done" || localStatus === "HOLDING") return (
-    <div className="pay-page"><Logo/><p className="pay-tagline">ESCROW</p>
-      <div className="pay-card"><div className="pay-card-bar"/>
+    <div className="pay-page"><Logo /><p className="pay-tagline">ESCROW</p>
+      <div className="pay-card"><div className="pay-card-bar" />
         <div className="pay-actions" style={{ textAlign: "center" }}>
           <div style={{ width: 60, height: 60, borderRadius: "50%", background: "rgba(91,143,249,.15)", border: "2px solid rgba(91,143,249,.3)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
-            <svg viewBox="0 0 24 24" fill="none" width="28" height="28"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--info)" strokeWidth="1.5"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--info)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" width="28" height="28"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--info)" strokeWidth="1.5" /><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--info)" strokeWidth="1.5" strokeLinecap="round" /></svg>
           </div>
           <p style={{ fontSize: 20, fontWeight: 800, color: "var(--ink-1)", marginBottom: 8 }}>Funds Held in Escrow</p>
           <p style={{ fontSize: 14, color: "#5b8ff9", fontWeight: 700, fontFamily: "IBM Plex Mono, monospace", marginBottom: 4 }}>{escrow.amount} USDC</p>
@@ -262,8 +274,8 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
           {/* Save link notice */}
           <div style={{ background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", padding: "10px 14px", marginBottom: 16, textAlign: "left", display: "flex", gap: 8 }}>
             <svg viewBox="0 0 16 16" fill="none" width="13" height="13" style={{ flexShrink: 0, marginTop: 1 }}>
-              <circle cx="8" cy="8" r="6" stroke="var(--ink-3)" strokeWidth="1.2"/>
-              <path d="M8 5v3l2 1.5" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinecap="round"/>
+              <circle cx="8" cy="8" r="6" stroke="var(--ink-3)" strokeWidth="1.2" />
+              <path d="M8 5v3l2 1.5" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
             <div>
               <p style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 600, marginBottom: 3 }}>You can close this page</p>
@@ -271,7 +283,7 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
             </div>
           </div>
 
-          {localDeadline && <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 16 }}><Countdown deadline={localDeadline}/></p>}
+          {localDeadline && <p style={{ fontSize: 11, color: "var(--ink-3)", marginBottom: 16 }}><Countdown deadline={localDeadline} /></p>}
 
           {/* Confirm receipt button */}
           {!showDisputeForm && (
@@ -323,16 +335,16 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
   // Main pay page
   return (
     <div className="pay-page">
-      <Logo/>
+      <Logo />
       <p className="pay-tagline">ESCROW PAYMENT</p>
       <div className="pay-card">
-        <div className="pay-card-bar"/>
+        <div className="pay-card-bar" />
 
         {/* Escrow badge */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", borderBottom: "1px solid var(--stroke)" }}>
           <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
-            <rect x="2" y="6" width="12" height="9" rx="1.5" stroke="#5b8ff9" strokeWidth="1.3"/>
-            <path d="M5 6V4.5a3 3 0 016 0V6" stroke="#5b8ff9" strokeWidth="1.3" strokeLinecap="round"/>
+            <rect x="2" y="6" width="12" height="9" rx="1.5" stroke="#5b8ff9" strokeWidth="1.3" />
+            <path d="M5 6V4.5a3 3 0 016 0V6" stroke="#5b8ff9" strokeWidth="1.3" strokeLinecap="round" />
           </svg>
           <span style={{ fontSize: 10, color: "#5b8ff9", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, letterSpacing: ".1em" }}>PROTECTED BY CONDUIT ESCROW</span>
         </div>
@@ -400,23 +412,23 @@ export function EscrowPayPage({ escrow }: { escrow: EscrowData }) {
           ) : !isOnArc ? (
             <>
               <div className="pay-warn-box" style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M8 2L1.5 13.5h13L8 2z" stroke="var(--warning)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M8 6v3M8 11v.5" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M8 2L1.5 13.5h13L8 2z" stroke="var(--warning)" strokeWidth="1.3" strokeLinejoin="round" /><path d="M8 6v3M8 11v.5" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round" /></svg>
                 Switch to Arc Testnet to continue.
               </div>
               <button className="pay-switch-btn" onClick={() => switchChain({ chainId: arcTestnet.id })}>Switch to Arc Testnet</button>
             </>
           ) : isBusy ? (
             <div className="pay-spin-zone">
-              <div className="pay-spinner"/>
+              <div className="pay-spinner" />
               <p className="pay-spin-text">{statusMsg()}</p>
               <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginTop: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: txHash ? "var(--c)" : "var(--stroke2)" }}/>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: txHash ? "var(--c)" : "var(--stroke2)" }} />
                   <span style={{ fontSize: 10, color: txHash ? "var(--c)" : "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Payment</span>
                 </div>
-                <div style={{ width: 20, height: 1, background: "var(--stroke2)" }}/>
+                <div style={{ width: 20, height: 1, background: "var(--stroke2)" }} />
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: feeTxHash ? "var(--c)" : "var(--stroke2)" }}/>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: feeTxHash ? "var(--c)" : "var(--stroke2)" }} />
                   <span style={{ fontSize: 10, color: feeTxHash ? "var(--c)" : "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Fee</span>
                 </div>
               </div>
