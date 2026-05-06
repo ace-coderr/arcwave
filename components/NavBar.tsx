@@ -17,7 +17,7 @@ const LINKS = [
     icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M9 6a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" strokeLinecap="round"/><path d="M7 10a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" strokeLinecap="round"/></svg>,
   },
   {
-    label: "Escrow", href: "/escrow",
+    label: "Escrow", href: "/escrow", soon: true,
     icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><rect x="2" y="6" width="12" height="9" rx="1.5"/><path d="M5 6V4.5a3 3 0 016 0V6" strokeLinecap="round"/><circle cx="8" cy="10.5" r="1.2" fill="currentColor" stroke="none"/><path d="M8 11.7v1.3" strokeLinecap="round"/></svg>,
   },
   {
@@ -25,7 +25,7 @@ const LINKS = [
     icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M2 5h12M2 5l3-3M2 5l3 3M14 11H2m12 0l-3-3m3 3l-3 3" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   },
   {
-    label: "Analytics", href: "/analytics",
+    label: "Analytics", href: "/analytics", soon: true,
     icon: <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><path d="M2 12V8h2.5v4H2zm4 0V4h2.5v8H6zm4 0V1h2.5v11H10z" opacity=".85"/></svg>,
   },
 ];
