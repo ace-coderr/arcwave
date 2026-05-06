@@ -80,7 +80,7 @@ export function NavBar() {
           {mounted ? (
             <Image src={logoSrc} alt="Conduit" width={140} height={52} style={{ height: 52, width: "auto", objectFit: "contain" }} priority />
           ) : (
-            <Image src="/conduit-logo-white.png" alt="Conduit" width={160} height={80} style={{ height: 80, width: "auto", objectFit: "contain" }} priority />
+            <Image src="/conduit-logo-white.png" alt="Conduit" width={180} height={100} style={{ height: 100, width: "auto", objectFit: "contain" }} priority />
           )}
         </Link>
 
