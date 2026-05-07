@@ -85,7 +85,7 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [feeBalance, setFeeBalance] = useState<string | null>(null);
   const [range, setRange] = useState<"7d" | "30d" | "all">("30d");
-  const [escrowTab, setEscrowTab] = useState<"all" | "disputed" | "holding">("disputed");
+  const [escrowTab, setEscrowTab] = useState<"all" | "disputed" | "mediation" | "holding">("disputed");
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolveMsg, setResolveMsg] = useState<Record<string, string>>({});
   const [messageThreads, setMessageThreads] = useState<Record<string, EscrowMessage[]>>({});
