@@ -22,6 +22,14 @@ interface PlatformLink {
   createdAt: string;
 }
 
+interface EscrowMessage {
+  id: string;
+  sender: string;
+  senderAddress?: string;
+  message: string;
+  createdAt: string;
+}
+
 interface EscrowLink {
   id: string;
   title: string;
@@ -38,6 +46,9 @@ interface EscrowLink {
   disputedAt?: string;
   disputeReason?: string;
   sellerContact?: string;
+  disputeDeadline?: string;
+  sellerRespondedAt?: string;
+  buyerLastMessageAt?: string;
   createdAt: string;
 }
 
@@ -53,7 +64,7 @@ function StatCard({ label, value, unit, sub, color, icon }: {
 }) {
   return (
     <div className="stat-card">
-      <div className="stat-card-line" style={{ background: color }} />
+      <div className="stat-card-line" style={{ background: color }}/>
       <div className="stat-icon-wrap">{icon}</div>
       <div className="stat-value">
         {value}
@@ -77,6 +88,8 @@ export default function AdminPage() {
   const [escrowTab, setEscrowTab] = useState<"all" | "disputed" | "holding">("disputed");
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolveMsg, setResolveMsg] = useState<Record<string, string>>({});
+  const [messageThreads, setMessageThreads] = useState<Record<string, EscrowMessage[]>>({});
+  const [expandedDispute, setExpandedDispute] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -91,7 +104,7 @@ export default function AdminPage() {
       const data = await res.json();
       setLinks(data.links ?? []);
       setEscrows(data.escrows ?? []);
-    } catch { }
+    } catch {}
     finally { setIsLoading(false); }
   }, [address]);
 
@@ -131,9 +144,10 @@ export default function AdminPage() {
   const totalEscrowVolume = escrows.reduce((s, e) => s + parseFloat(e.amount), 0);
   const totalHeld = holdingEscrows.reduce((s, e) => s + parseFloat(e.amount), 0);
 
+  const mediationEscrows = escrows.filter(e => e.status === "MEDIATION");
   const filteredEscrows = escrowTab === "disputed" ? disputedEscrows
     : escrowTab === "holding" ? holdingEscrows
-      : escrows;
+    : escrows;
 
   const fmt = (n: number) => n % 1 === 0 ? n.toString() : n.toFixed(2);
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -165,21 +179,17 @@ export default function AdminPage() {
     earnerMap[addr] = (earnerMap[addr] ?? 0) + parseFloat(l.amount);
   });
   const topEarners = Object.entries(earnerMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const escrowReleases = releasedEscrows.map(e => ({
-    id: e.id,
-    title: e.title,
-    amount: e.amount,
-    status: "COMPLETED",
-    recipientAddress: e.sellerAddress,
-    txHash: e.releaseTxHash ?? e.txHash,
-    paidBy: e.buyerAddress,
-    paidAt: e.confirmedAt ?? e.paidAt,
-    createdAt: e.createdAt,
-    isEscrow: true,
-  }));
-  const recentTx = [...completed.map(l => ({ ...l, isEscrow: false })), ...escrowReleases]
-    .sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime())
-    .slice(0, 10);
+  const recentTx = [...completed].sort((a, b) => new Date(b.paidAt ?? b.createdAt).getTime() - new Date(a.paidAt ?? a.createdAt).getTime()).slice(0, 10);
+
+  const fetchMessages = async (escrowId: string) => {
+    try {
+      const res = await fetch(`/api/escrow/${escrowId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessageThreads(prev => ({ ...prev, [escrowId]: data.messages ?? [] }));
+      }
+    } catch {}
+  };
 
   const resolveEscrow = async (escrowId: string, action: "release" | "refund") => {
     setResolvingId(escrowId);
@@ -194,7 +204,7 @@ export default function AdminPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        setResolveMsg(prev => ({ ...prev, [escrowId]: action === "release" ? "Released to seller" : "Refunded to buyer" }));
+        setResolveMsg(prev => ({ ...prev, [escrowId]: action === "release" ? "✓ Released to seller" : "✓ Refunded to buyer" }));
         fetchAll();
       } else {
         setResolveMsg(prev => ({ ...prev, [escrowId]: `Error: ${data.error}` }));
@@ -206,18 +216,18 @@ export default function AdminPage() {
     }
   };
 
-  const escrowStatusColor = (s: string) => ({ ACTIVE: "#f5a623", HOLDING: "#5b8ff9", CONFIRMED: "#00E5A0", RELEASED: "#00E5A0", DISPUTED: "#f03e5f", CANCELLED: "#666" }[s] ?? "#666");
+  const escrowStatusColor = (s: string) => ({ ACTIVE: "#f5a623", HOLDING: "#5b8ff9", CONFIRMED: "#00E5A0", RELEASED: "#00E5A0", DISPUTED: "#f03e5f", MEDIATION: "#a78bfa", CANCELLED: "#666" }[s] ?? "#666");
 
   if (!mounted) return null;
 
   if (!isConnected) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, marginBottom: 40 }} />
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, marginBottom: 40 }}/>
         <div style={{ background: "var(--surface)", border: "1px solid var(--stroke)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
-          <div style={{ height: 2, background: "var(--c)", position: "absolute", top: 0, left: 0, right: 0 }} />
+          <div style={{ height: 2, background: "var(--c)", position: "absolute", top: 0, left: 0, right: 0 }}/>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--c-dim)", border: "1px solid var(--c-border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--c)" strokeWidth="1.5" /><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--c)" strokeWidth="1.5"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round"/></svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--ink-1)", marginBottom: 8 }}>Admin Access</p>
           <p style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 24, lineHeight: 1.6 }}>Connect your admin wallet to access the platform dashboard.</p>
@@ -232,11 +242,11 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Sora, sans-serif", padding: 20 }}>
-        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, marginBottom: 40 }} />
+        <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, marginBottom: 40 }}/>
         <div style={{ background: "var(--surface)", border: "1px solid rgba(240,62,95,.2)", borderRadius: "var(--r-xl)", padding: "40px 36px", maxWidth: 400, width: "100%", textAlign: "center", boxShadow: "var(--elev-2)", position: "relative", overflow: "hidden" }}>
-          <div style={{ height: 2, background: "var(--danger)", position: "absolute", top: 0, left: 0, right: 0 }} />
+          <div style={{ height: 2, background: "var(--danger)", position: "absolute", top: 0, left: 0, right: 0 }}/>
           <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg viewBox="0 0 24 24" fill="none" width="24" height="24"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="var(--danger)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
           <p style={{ fontSize: 18, fontWeight: 800, color: "var(--danger)", marginBottom: 8 }}>Access Denied</p>
           <p style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8, lineHeight: 1.6 }}>This wallet is not authorized.</p>
@@ -255,15 +265,15 @@ export default function AdminPage() {
       {/* Top bar */}
       <div style={{ height: 56, background: "var(--surface)", borderBottom: "1px solid var(--stroke)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 32px", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 80, width: "auto" }} />
-          <div style={{ width: 1, height: 20, background: "var(--stroke)" }} />
+          <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 36, width: "auto" }}/>
+          <div style={{ width: 1, height: 20, background: "var(--stroke)" }}/>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.2)", borderRadius: 20, padding: "3px 12px" }}>
-            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }} />
+            <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--danger)" }}/>
             <span style={{ fontSize: 10, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, letterSpacing: ".08em" }}>ADMIN</span>
           </div>
           {disputedEscrows.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.3)", borderRadius: 20, padding: "3px 10px" }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--danger)", animation: "pulse 1.5s infinite" }} />
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--danger)", animation: "pulse 1.5s infinite" }}/>
               <span style={{ fontSize: 10, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", fontWeight: 700 }}>{disputedEscrows.length} DISPUTE{disputedEscrows.length > 1 ? "S" : ""}</span>
             </div>
           )}
@@ -283,23 +293,23 @@ export default function AdminPage() {
 
         {isLoading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
-            <div className="page-spinner" />
+            <div className="page-spinner"/>
           </div>
         ) : (
           <>
             {/* Main stats */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
               <StatCard label="Total Volume" value={fmt(totalVolume)} unit="USDC" sub={`${completed.length} transactions`} color="var(--c)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /><path d="M10 6v8M7.5 8C7.5 6.9 8.6 6 10 6s2.5.9 2.5 2-1.1 2-2.5 2-2.5.9-2.5 2S8.6 14 10 14s2.5-.9 2.5-2" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round" /></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/><path d="M10 6v8M7.5 8C7.5 6.9 8.6 6 10 6s2.5.9 2.5 2-1.1 2-2.5 2-2.5.9-2.5 2S8.6 14 10 14s2.5-.9 2.5-2" stroke="var(--c)" strokeWidth="1.2" strokeLinecap="round"/></svg>}
               />
               <StatCard label="Fees Collected" value={feeBalance ?? fmt(totalFees)} unit="USDC" sub={feeBalance ? "live balance" : `calc. ${FEE_PERCENT}%`} color="var(--warning)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 5h16v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="var(--warning)" strokeWidth="1.3" /><path d="M2 5l8 6 8-6" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round" /></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 5h16v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5z" stroke="var(--warning)" strokeWidth="1.3"/><path d="M2 5l8 6 8-6" stroke="var(--warning)" strokeWidth="1.3" strokeLinecap="round"/></svg>}
               />
               <StatCard label="Total Users" value={uniqueUsers.toString()} sub={`${uniquePayers} unique payers`} color="var(--info)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="8" cy="7" r="3" stroke="var(--info)" strokeWidth="1.3" /><path d="M2 17c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round" /><path d="M13 11c2.21 0 4 1.79 4 4" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round" /><circle cx="14" cy="6" r="2" stroke="var(--info)" strokeWidth="1.3" /></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="8" cy="7" r="3" stroke="var(--info)" strokeWidth="1.3"/><path d="M2 17c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round"/><path d="M13 11c2.21 0 4 1.79 4 4" stroke="var(--info)" strokeWidth="1.3" strokeLinecap="round"/><circle cx="14" cy="6" r="2" stroke="var(--info)" strokeWidth="1.3"/></svg>}
               />
               <StatCard label="Total Links" value={links.length.toString()} sub={`${completionRate}% completion`} color="var(--c)"
-                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M11 7a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /><path d="M9 13a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg>}
+                icon={<svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M11 7a3 3 0 010 4.24l-1.5 1.5a3 3 0 01-4.24-4.24l.75-.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/><path d="M9 13a3 3 0 010-4.24l1.5-1.5a3 3 0 014.24 4.24l-.75.75" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg>}
               />
             </div>
 
@@ -362,15 +372,15 @@ export default function AdminPage() {
               <div className="card-head" style={{ justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div className="card-head-icon">
-                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><rect x="3" y="8" width="14" height="10" rx="1.5" stroke="var(--c)" strokeWidth="1.3" /><path d="M6 8V6a4 4 0 018 0v2" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg>
+                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><rect x="3" y="8" width="14" height="10" rx="1.5" stroke="var(--c)" strokeWidth="1.3"/><path d="M6 8V6a4 4 0 018 0v2" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg>
                   </div>
                   <div>
                     <div className="card-title">Escrow Links</div>
-                    <div className="card-subtitle">{escrows.length} total · {disputedEscrows.length} disputed · {holdingEscrows.length} holding</div>
+                    <div className="card-subtitle">{escrows.length} total · {disputedEscrows.length} disputed · {mediationEscrows.length} in mediation · {holdingEscrows.length} holding</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 4, background: "var(--bg)", borderRadius: "var(--r-sm)", padding: 3 }}>
-                  {(["disputed", "holding", "all"] as const).map(t => (
+                  {(["disputed", "mediation", "holding", "all"] as const).map(t => (
                     <button key={t} onClick={() => setEscrowTab(t)} style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: escrowTab === t ? "var(--surface)" : "transparent", color: escrowTab === t ? (t === "disputed" ? "var(--danger)" : "var(--ink-1)") : "var(--ink-3)", fontSize: 11, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, cursor: "pointer", transition: "all .15s", position: "relative" }}>
                       {t.toUpperCase()}
                       {t === "disputed" && disputedEscrows.length > 0 && (
@@ -391,7 +401,7 @@ export default function AdminPage() {
               <div style={{ maxHeight: 400, overflowY: "auto" }}>
                 {filteredEscrows.length === 0 ? (
                   <div style={{ padding: 32, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
-                    {escrowTab === "disputed" ? "No disputes" : escrowTab === "holding" ? "No funds currently held" : "No escrow links yet"}
+                    {escrowTab === "disputed" ? "No disputes 🎉" : escrowTab === "holding" ? "No funds currently held" : "No escrow links yet"}
                   </div>
                 ) : filteredEscrows.map((e, i) => (
                   <div key={e.id}
@@ -410,10 +420,7 @@ export default function AdminPage() {
                         <p style={{ fontSize: 11, color: "var(--danger)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>"{e.disputeReason}"</p>
                       )}
                       {e.sellerContact && (
-                        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, fontFamily: "IBM Plex Mono, monospace", display: "flex", alignItems: "center", gap: 4 }}>
-                          <svg viewBox="0 0 14 14" fill="none" width="10" height="10"><path d="M2 2.5C2 7.7 6.3 12 11.5 12l.5-2-2-1-1 1C7 9 5 7 4 5l1-1-1-2H2z" stroke="var(--ink-3)" strokeWidth="1.2" strokeLinejoin="round" /></svg>
-                          {e.sellerContact}
-                        </p>
+                        <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, fontFamily: "IBM Plex Mono, monospace" }}>📞 {e.sellerContact}</p>
                       )}
                       {e.txHash && (
                         <a href={`https://testnet.arcscan.app/tx/${e.txHash}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none" }}>
@@ -432,7 +439,7 @@ export default function AdminPage() {
                     <span style={{ fontSize: 10, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)" }}>{fmtDate(e.createdAt)}</span>
 
                     {/* Dispute resolution */}
-                    {e.status === "DISPUTED" && (
+                    {["DISPUTED", "MEDIATION"].includes(e.status) && (
                       <div style={{ gridColumn: "1 / -1", paddingTop: 10, borderTop: "1px solid rgba(240,62,95,.15)", marginTop: 6 }}>
                         {/* Who disputed info */}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 10, fontSize: 11, fontFamily: "IBM Plex Mono, monospace", background: "rgba(240,62,95,.05)", border: "1px solid rgba(240,62,95,.15)", borderRadius: "var(--r-sm)", padding: "8px 12px" }}>
@@ -441,6 +448,33 @@ export default function AdminPage() {
                           <span><span style={{ color: "var(--ink-3)" }}>Amount at stake: </span><span style={{ color: "#5b8ff9", fontWeight: 700 }}>{fmt(parseFloat(e.amount))} USDC</span></span>
                           {e.sellerContact && <span><span style={{ color: "var(--ink-3)" }}>Contact: </span><span style={{ color: "var(--ink-1)", fontWeight: 700 }}>{e.sellerContact}</span></span>}
                         </div>
+                        {/* View thread */}
+                        <button onClick={() => { setExpandedDispute(expandedDispute === e.id ? null : e.id); fetchMessages(e.id); }}
+                          style={{ marginBottom: 10, padding: "5px 12px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", fontSize: 11, fontWeight: 700, color: "var(--ink-2)", cursor: "pointer", fontFamily: "Sora, sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+                          <svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M14 2H2a1 1 0 00-1 1v8a1 1 0 001 1h3l3 3 3-3h3a1 1 0 001-1V3a1 1 0 00-1-1z" stroke="currentColor" strokeWidth="1.2"/></svg>
+                          {expandedDispute === e.id ? "Hide Thread" : "View Message Thread"}
+                        </button>
+                        {expandedDispute === e.id && (
+                          <div style={{ background: "var(--bg)", border: "1px solid var(--stroke)", borderRadius: 8, padding: 12, marginBottom: 10, maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                            {(messageThreads[e.id] ?? []).length === 0 ? (
+                              <p style={{ fontSize: 11, color: "var(--ink-3)", textAlign: "center", padding: "12px 0" }}>No messages yet</p>
+                            ) : (messageThreads[e.id] ?? []).map((msg: EscrowMessage) => (
+                              <div key={msg.id}>
+                                {msg.sender === "SYSTEM" ? (
+                                  <div style={{ background: "rgba(91,143,249,.08)", border: "1px solid rgba(91,143,249,.2)", borderRadius: 6, padding: "8px 10px", fontSize: 10, color: "#5b8ff9", fontFamily: "IBM Plex Mono, monospace", textAlign: "center" as const }}>{msg.message}</div>
+                                ) : (
+                                  <div>
+                                    <span style={{ fontSize: 9, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace", display: "block", marginBottom: 3 }}>
+                                      {msg.sender} · {new Date(msg.createdAt).toLocaleDateString("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                      {msg.senderAddress && ` · ${msg.senderAddress.slice(0, 6)}...${msg.senderAddress.slice(-4)}`}
+                                    </span>
+                                    <div style={{ background: msg.sender === "BUYER" ? "rgba(91,143,249,.08)" : msg.sender === "SELLER" ? "rgba(0,229,160,.08)" : "var(--raised)", border: `1px solid ${msg.sender === "BUYER" ? "rgba(91,143,249,.2)" : msg.sender === "SELLER" ? "var(--c-border)" : "var(--stroke)"}`, borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--ink-1)", lineHeight: 1.5 }}>{msg.message}</div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {/* Resolve buttons */}
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           {resolveMsg[e.id] ? (
@@ -449,11 +483,11 @@ export default function AdminPage() {
                             <>
                               <button onClick={() => resolveEscrow(e.id, "release")} disabled={resolvingId === e.id}
                                 style={{ padding: "7px 16px", background: "var(--c)", border: "none", borderRadius: "var(--r-sm)", color: "#000", fontSize: 12, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}>
-                                {resolvingId === e.id ? "Processing..." : "Release to Seller"}
+                                {resolvingId === e.id ? "Processing..." : "✓ Release to Seller"}
                               </button>
                               <button onClick={() => resolveEscrow(e.id, "refund")} disabled={resolvingId === e.id}
                                 style={{ padding: "7px 16px", background: "transparent", border: "1px solid var(--danger)", borderRadius: "var(--r-sm)", color: "var(--danger)", fontSize: 12, fontWeight: 700, cursor: resolvingId === e.id ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: resolvingId === e.id ? .5 : 1 }}>
-                                {resolvingId === e.id ? "Processing..." : "Refund Buyer"}
+                                {resolvingId === e.id ? "Processing..." : "↩ Refund Buyer"}
                               </button>
                               <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Review dispute reason above before resolving</span>
                             </>
@@ -471,7 +505,7 @@ export default function AdminPage() {
               <div className="card-head" style={{ justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   <div className="card-head-icon">
-                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 14l4-4 4 2 4-6 4 2" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    <svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M2 14l4-4 4 2 4-6 4 2" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </div>
                   <div>
                     <div className="card-title">Platform Volume</div>
@@ -491,7 +525,7 @@ export default function AdminPage() {
                   <>
                     <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 140, marginBottom: 8 }}>
                       {chartData.map((day, i) => (
-                        <div key={day.date} title={`${day.label}: ${fmt(day.amount)} USDC (${day.count} tx)`} style={{ flex: 1, height: `${Math.max((day.amount / maxAmount) * 100, day.amount > 0 ? 3 : 1.5)}%`, background: day.amount > 0 ? (i === chartData.length - 1 ? "var(--c)" : "rgba(0,229,160,.4)") : "var(--raised)", borderRadius: "3px 3px 0 0", minHeight: 2, transition: "height .4s ease" }} />
+                        <div key={day.date} title={`${day.label}: ${fmt(day.amount)} USDC (${day.count} tx)`} style={{ flex: 1, height: `${Math.max((day.amount / maxAmount) * 100, day.amount > 0 ? 3 : 1.5)}%`, background: day.amount > 0 ? (i === chartData.length - 1 ? "var(--c)" : "rgba(0,229,160,.4)") : "var(--raised)", borderRadius: "3px 3px 0 0", minHeight: 2, transition: "height .4s ease" }}/>
                       ))}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -508,7 +542,7 @@ export default function AdminPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
               <div className="card">
                 <div className="card-head">
-                  <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 2l2.4 4.8 5.6.8-4 3.9.9 5.5L10 14.5l-4.9 2.5.9-5.5L2 7.6l5.6-.8L10 2z" stroke="var(--c)" strokeWidth="1.3" strokeLinejoin="round" /></svg></div>
+                  <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M10 2l2.4 4.8 5.6.8-4 3.9.9 5.5L10 14.5l-4.9 2.5.9-5.5L2 7.6l5.6-.8L10 2z" stroke="var(--c)" strokeWidth="1.3" strokeLinejoin="round"/></svg></div>
                   <div><div className="card-title">Top Earners</div><div className="card-subtitle">By total volume</div></div>
                 </div>
                 <div style={{ padding: "0 0 8px" }}>
@@ -526,7 +560,7 @@ export default function AdminPage() {
 
               <div className="card">
                 <div className="card-head">
-                  <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /></svg></div>
+                  <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/></svg></div>
                   <div><div className="card-title">Platform Breakdown</div><div className="card-subtitle">All links by status</div></div>
                 </div>
                 <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -542,7 +576,7 @@ export default function AdminPage() {
                         <span style={{ fontSize: 12, fontFamily: "IBM Plex Mono, monospace", color: s.color, fontWeight: 700 }}>{s.count}</span>
                       </div>
                       <div style={{ height: 4, borderRadius: 4, background: "var(--raised)", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: links.length > 0 ? `${(s.count / links.length) * 100}%` : "0%", background: s.color, borderRadius: 4, transition: "width .5s ease" }} />
+                        <div style={{ height: "100%", width: links.length > 0 ? `${(s.count / links.length) * 100}%` : "0%", background: s.color, borderRadius: 4, transition: "width .5s ease" }}/>
                       </div>
                     </div>
                   ))}
@@ -553,7 +587,7 @@ export default function AdminPage() {
             {/* Recent transactions */}
             <div className="card">
               <div className="card-head">
-                <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3" /><path d="M10 6v4l2.5 2.5" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" /></svg></div>
+                <div className="card-head-icon"><svg viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="8" stroke="var(--c)" strokeWidth="1.3"/><path d="M10 6v4l2.5 2.5" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round"/></svg></div>
                 <div><div className="card-title">Recent Transactions</div><div className="card-subtitle">Latest 10 across all users</div></div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 12, padding: "10px 24px", background: "var(--raised)", borderBottom: "1px solid var(--stroke)" }}>
@@ -571,12 +605,7 @@ export default function AdminPage() {
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
-                        {(tx as any).isEscrow && (
-                          <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", background: "rgba(91,143,249,.12)", border: "1px solid rgba(91,143,249,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em", flexShrink: 0 }}>ESCROW</span>
-                        )}
-                      </div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.title}</p>
                       {tx.txHash && (
                         <a href={`https://testnet.arcscan.app/tx/${tx.txHash}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none" }}>
                           {tx.txHash.slice(0, 8)}...↗
