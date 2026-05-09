@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -38,29 +37,29 @@ model EscrowLink {
   stealthAddress      String
   stealthPrivateKey   String
   status              String          @default("ACTIVE")
-  // ACTIVE → HOLDING → CONFIRMED/DISPUTED → MEDIATION/RELEASED → CANCELLED
   txHash              String?
   releaseTxHash       String?
   feeTxHash           String?
   paidAt              DateTime?
-  releaseDeadline     DateTime?
+  deliveryDays        Int?            // seller-set expected delivery window in days
+  deliveryDeadline    DateTime?       // paidAt + deliveryDays
+  releaseDeadline     DateTime?       // deliveryDeadline + 7 days (auto-release)
   confirmedAt         DateTime?
   disputedAt          DateTime?
   disputeReason       String?
-  disputeDeadline     DateTime?       // 48hrs after dispute raised
-  sellerRespondedAt   DateTime?       // when seller submits their side
-  buyerLastMessageAt  DateTime?       // last buyer message after dispute
+  disputeDeadline     DateTime?
+  sellerRespondedAt   DateTime?
+  buyerLastMessageAt  DateTime?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   messages            EscrowMessage[]
 }
 
-// Mediation message thread
 model EscrowMessage {
   id            String     @id @default(cuid())
   escrowId      String
   escrow        EscrowLink @relation(fields: [escrowId], references: [id])
-  sender        String     // "BUYER" | "SELLER" | "ADMIN" | "SYSTEM"
+  sender        String
   senderAddress String?
   message       String
   createdAt     DateTime   @default(now())

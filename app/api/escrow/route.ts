@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
       id: true, title: true, description: true, amount: true,
       sellerAddress: true, sellerContact: true, buyerAddress: true, stealthAddress: true,
       status: true, txHash: true, releaseTxHash: true,
-      paidAt: true, releaseDeadline: true, confirmedAt: true,
-      disputedAt: true, disputeReason: true, createdAt: true,
+      paidAt: true, deliveryDays: true, deliveryDeadline: true, releaseDeadline: true,
+      confirmedAt: true, disputedAt: true, disputeReason: true, createdAt: true,
     },
   });
 
@@ -42,13 +42,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   let body: any;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }); }
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
 
-  const { title, description, amount, sellerAddress, sellerContact } = body;
+  const { title, description, amount, sellerAddress, sellerContact, deliveryDays } = body;
   if (!title?.trim()) return NextResponse.json({ error: "Title is required." }, { status: 400 });
   if (!sellerAddress) return NextResponse.json({ error: "Seller address is required." }, { status: 400 });
+  if (!sellerContact?.trim()) return NextResponse.json({ error: "Contact is required." }, { status: 400 });
   const parsed = parseFloat(amount);
   if (isNaN(parsed) || parsed <= 0) return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
+  const parsedDays = parseInt(deliveryDays);
+  if (isNaN(parsedDays) || parsedDays < 1) return NextResponse.json({ error: "Enter a valid delivery window." }, { status: 400 });
 
   const wallet = generateStealthWallet();
   const escrow = await db.escrowLink.create({
@@ -57,7 +62,8 @@ export async function POST(req: NextRequest) {
       description: description?.trim() || null,
       amount: parsed.toString(),
       sellerAddress: sellerAddress.toLowerCase(),
-      sellerContact: sellerContact?.trim() || null,
+      sellerContact: sellerContact.trim(),
+      deliveryDays: parsedDays,
       stealthAddress: wallet.address,
       stealthPrivateKey: wallet.encryptedPrivateKey,
       status: "ACTIVE",
