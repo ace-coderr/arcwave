@@ -89,6 +89,20 @@ export default function EscrowPage() {
   }, [address]);
 
   useEffect(() => { if (isConnected && address) fetchEscrows(); }, [isConnected, address, fetchEscrows]);
+  
+  useEffect(() => {
+    if (!address) return;
+    fetch(`/api/escrow/buyer?address=${address}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.escrows?.length) {
+          setBuyerOrders(data.escrows.map((e: any) => ({
+            id: e.id, title: e.title, amount: e.amount, paidAt: e.paidAt ?? e.createdAt,
+          })));
+        }
+      })
+      .catch(() => { });
+  }, [address]);
 
   const createEscrow = async (e: React.FormEvent) => {
     e.preventDefault();
