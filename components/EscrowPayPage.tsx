@@ -89,6 +89,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [confirming, setConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputing, setDisputing] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
   const [localStatus, setLocalStatus] = useState(escrow.status);
   const [localDeadline, setLocalDeadline] = useState(escrow.releaseDeadline);
   const [localDeliveryDeadline, setLocalDeliveryDeadline] = useState(escrow.deliveryDeadline);
@@ -99,7 +100,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -135,13 +135,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    if (showDisputeForm && disputeTextareaRef.current) {
-      disputeTextareaRef.current.focus();
-      const len = disputeTextareaRef.current.value.length;
-      disputeTextareaRef.current.setSelectionRange(len, len);
-    }
-  }, [showDisputeForm]);
 
   useEffect(() => {
     if (paymentConfirmed && txHash && payStep === "sending_payment") {
@@ -234,19 +227,18 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   };
 
   const handleDispute = async () => {
-    const reason = disputeTextareaRef.current?.value?.trim() ?? "";
-    if (!reason) { setError("Please describe the issue."); return; }
+    if (!disputeReason.trim()) { setError("Please describe the issue."); return; }
     setDisputing(true);
     try {
       const res = await fetch(`/api/escrow/${escrow.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "dispute", disputeReason: reason }),
+        body: JSON.stringify({ action: "dispute", disputeReason }),
       });
       if (res.ok) {
         const data = await res.json();
         setLocalStatus("DISPUTED");
-        setEscrow(prev => ({ ...prev, disputeDeadline: data.disputeDeadline, disputeReason: reason }));
+        setEscrow(prev => ({ ...prev, disputeDeadline: data.disputeDeadline, disputeReason }));
         try {
           const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
           localStorage.setItem("conduit-escrow-orders", JSON.stringify(existing.filter((o: any) => o.id !== escrow.id)));
@@ -536,13 +528,16 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           {deliveryPassed && showDisputeForm && (
             <div style={{ textAlign: "left", marginTop: 8 }}>
               <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
-              <textarea id="dispute-textarea" ref={disputeTextareaRef} dir="ltr"
+              <textarea
+                value={disputeReason}
+                onChange={e => setDisputeReason(e.target.value)}
+                onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
                 placeholder="e.g. Item not delivered, wrong item received..."
-                style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none", direction: "ltr", unicodeBidi: "plaintext" as const }}
+                style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
               />
               {error && <div className="pay-err-box" style={{ marginTop: 8 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button onClick={() => { setShowDisputeForm(false); setError(""); }} style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>Cancel</button>
+                <button onClick={() => { setShowDisputeForm(false); setError(""); setDisputeReason(""); }} style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>Cancel</button>
                 <button onClick={handleDispute} disabled={disputing} style={{ flex: 2, padding: "10px", background: "var(--danger)", border: "none", borderRadius: "var(--r-sm)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: disputing ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: disputing ? .5 : 1 }}>
                   {disputing ? "Submitting..." : "Submit Dispute"}
                 </button>
