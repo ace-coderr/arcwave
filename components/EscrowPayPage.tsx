@@ -552,7 +552,9 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
             </p>
           )}
 
-          {txHash && <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ display: "block", marginTop: 16 }}>View payment on ArcScan ↗</a>}
+          {(txHash || escrow.txHash) && (
+            <a href={`https://testnet.arcscan.app/tx/${txHash ?? escrow.txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ display: "block", marginTop: 16 }}>View payment on ArcScan ↗</a>
+          )}
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
