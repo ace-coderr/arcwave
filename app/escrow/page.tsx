@@ -89,7 +89,7 @@ export default function EscrowPage() {
   }, [address]);
 
   useEffect(() => { if (isConnected && address) fetchEscrows(); }, [isConnected, address, fetchEscrows]);
-  
+
   useEffect(() => {
     if (!address) return;
     fetch(`/api/escrow/buyer?address=${address}`)
@@ -428,7 +428,11 @@ export default function EscrowPage() {
                     {e.status === "HOLDING" && <span style={{ fontSize: 11, color: "var(--info)", fontFamily: "IBM Plex Mono, monospace" }}>Awaiting delivery</span>}
                     {e.status === "CONFIRMED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>Releasing...</span>}
                     {e.status === "RELEASED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>✓ Released</span>}
-                    {["DISPUTED", "MEDIATION"].includes(e.status) && <span style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace" }}>Admin review</span>}
+                    {["DISPUTED", "MEDIATION"].includes(e.status) && (
+                      <a href={`/escrow/${e.id}`} style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none", fontWeight: 700 }}>
+                        View Dispute →
+                      </a>
+                    )}
                     {e.status === "CANCELLED" && <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Cancelled</span>}
                   </div>
                 </div>

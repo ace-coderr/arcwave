@@ -532,7 +532,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           {deliveryPassed && showDisputeForm && (
             <div style={{ textAlign: "left", marginTop: 8 }}>
               <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
-              <textarea value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+              <textarea autoFocus value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
                 placeholder="e.g. Item not delivered, wrong item received..."
                 style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
               />
