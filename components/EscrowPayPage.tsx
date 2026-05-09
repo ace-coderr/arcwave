@@ -136,6 +136,14 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   }, [messages]);
 
   useEffect(() => {
+    if (showDisputeForm && disputeTextareaRef.current) {
+      disputeTextareaRef.current.focus();
+      const len = disputeTextareaRef.current.value.length;
+      disputeTextareaRef.current.setSelectionRange(len, len);
+    }
+  }, [showDisputeForm]);
+
+  useEffect(() => {
     if (paymentConfirmed && txHash && payStep === "sending_payment") {
       setPayStep("sending_fee");
       sendFee(
@@ -520,13 +528,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           )}
 
           {deliveryPassed && !showDisputeForm && (
-            <button onClick={() => {
-              setShowDisputeForm(true);
-              setTimeout(() => {
-                const el = document.getElementById("dispute-textarea");
-                if (el) (el as HTMLTextAreaElement).focus();
-              }, 10);
-            }}
+            <button onClick={() => setShowDisputeForm(true)}
               style={{ width: "100%", padding: "12px", background: "transparent", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-md)", color: "var(--danger)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>
               Raise a Dispute
             </button>
