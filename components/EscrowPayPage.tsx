@@ -179,6 +179,11 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
       setLocalDeadline(data.releaseDeadline);
       setLocalDeliveryDeadline(data.deliveryDeadline);
       setPayStep("done");
+      try {
+        const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
+        const updated = [{ id: escrow.id, title: escrow.title, amount: escrow.amount, paidAt: new Date().toISOString() }, ...existing.filter((o: any) => o.id !== escrow.id)].slice(0, 20);
+        localStorage.setItem("conduit-escrow-orders", JSON.stringify(updated));
+      } catch { }
       // Save to localStorage so buyer can find this order later
       try {
         const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
@@ -214,7 +219,13 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "confirm" }),
       });
-      if (res.ok) setLocalStatus("CONFIRMED");
+      if (res.ok) {
+        setLocalStatus("CONFIRMED");
+        try {
+          const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
+          localStorage.setItem("conduit-escrow-orders", JSON.stringify(existing.filter((o: any) => o.id !== escrow.id)));
+        } catch { }
+      }
       else { const d = await res.json(); setError(d.error ?? "Failed."); }
     } catch { setError("Network error."); }
     finally { setConfirming(false); }
@@ -233,6 +244,10 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         const data = await res.json();
         setLocalStatus("DISPUTED");
         setEscrow(prev => ({ ...prev, disputeDeadline: data.disputeDeadline, disputeReason }));
+        try {
+          const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
+          localStorage.setItem("conduit-escrow-orders", JSON.stringify(existing.filter((o: any) => o.id !== escrow.id)));
+        } catch { }
         setShowDisputeForm(false);
         fetchMessages();
       } else { const d = await res.json(); setError(d.error ?? "Failed."); }
@@ -538,20 +553,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           )}
 
           {txHash && <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ display: "block", marginTop: 16 }}>View payment on ArcScan ↗</a>}
-          <a href="/"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              marginTop: 12, padding: "11px 22px",
-              background: "var(--raised)", border: "1px solid var(--stroke)",
-              borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700,
-              color: "var(--ink-2)", textDecoration: "none",
-            }}
-          >
-            <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Back to Conduit
-          </a>
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
