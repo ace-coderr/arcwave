@@ -17,6 +17,8 @@ interface EscrowLink {
   txHash?: string;
   releaseTxHash?: string;
   paidAt?: string;
+  deliveryDays?: number;
+  deliveryDeadline?: string;
   releaseDeadline?: string;
   confirmedAt?: string;
   disputedAt?: string;
@@ -24,18 +26,16 @@ interface EscrowLink {
   createdAt: string;
 }
 
-function Countdown({ deadline }: { deadline: string }) {
+function Countdown({ deadline, label }: { deadline: string; label: string }) {
   const [text, setText] = useState("");
   useEffect(() => {
     const update = () => {
       const diff = new Date(deadline).getTime() - Date.now();
-      if (diff <= 0) { setText("Auto-releasing..."); return; }
+      if (diff <= 0) { setText("Passed"); return; }
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      if (d > 0) setText(`Auto-release in ${d}d ${h}h`);
-      else if (h > 0) setText(`Auto-release in ${h}h ${m}m`);
-      else setText(`Auto-release in ${m}m`);
+      if (d > 0) setText(`${d}d ${h}h`);
+      else setText(`${h}h`);
     };
     update();
     const id = setInterval(update, 60000);
@@ -43,11 +43,11 @@ function Countdown({ deadline }: { deadline: string }) {
   }, [deadline]);
   const diff = new Date(deadline).getTime() - Date.now();
   const color = diff < 3600000 ? "var(--danger)" : diff < 86400000 ? "var(--warning)" : "var(--info)";
-  return <span style={{ fontSize: 10, color, fontFamily: "IBM Plex Mono, monospace" }}>{text}</span>;
+  return <span style={{ fontSize: 10, color, fontFamily: "IBM Plex Mono, monospace" }}>{label}: {text}</span>;
 }
 
-const statusColor = (s: string) => ({ ACTIVE: "#f5a623", HOLDING: "#5b8ff9", CONFIRMED: "#00E5A0", RELEASED: "#00E5A0", DISPUTED: "#f03e5f", CANCELLED: "#666" }[s] ?? "#666");
-const statusClass = (s: string) => ({ ACTIVE: "status-yellow", HOLDING: "status-blue", CONFIRMED: "status-green", RELEASED: "status-green", DISPUTED: "status-red", CANCELLED: "status-red" }[s] ?? "status-red");
+const statusColor = (s: string) => ({ ACTIVE: "#f5a623", HOLDING: "#5b8ff9", CONFIRMED: "#00E5A0", RELEASED: "#00E5A0", DISPUTED: "#f03e5f", MEDIATION: "#a78bfa", CANCELLED: "#666" }[s] ?? "#666");
+const statusClass = (s: string) => ({ ACTIVE: "status-yellow", HOLDING: "status-blue", CONFIRMED: "status-green", RELEASED: "status-green", DISPUTED: "status-red", MEDIATION: "status-red", CANCELLED: "status-red" }[s] ?? "status-red");
 
 export default function EscrowPage() {
   const { address, isConnected } = useAccount();
@@ -59,6 +59,7 @@ export default function EscrowPage() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [sellerContact, setSellerContact] = useState("");
+  const [deliveryDays, setDeliveryDays] = useState("7");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -89,18 +90,25 @@ export default function EscrowPage() {
     if (isNaN(parsed) || parsed <= 0) { setCreateError("Enter a valid amount."); return; }
     if (!title.trim()) { setCreateError("Title is required."); return; }
     if (!sellerContact.trim()) { setCreateError("Contact is required so buyer can reach you."); return; }
+    const parsedDays = parseInt(deliveryDays);
+    if (isNaN(parsedDays) || parsedDays < 1) { setCreateError("Enter a valid delivery window."); return; }
     setIsCreating(true); setCreateError("");
     try {
       const res = await fetch("/api/escrow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), amount: parsed.toString(), description: description.trim() || undefined, sellerAddress: address, sellerContact: sellerContact.trim() || undefined }),
+        body: JSON.stringify({
+          title: title.trim(), amount: parsed.toString(),
+          description: description.trim() || undefined,
+          sellerAddress: address, sellerContact: sellerContact.trim(),
+          deliveryDays: parsedDays,
+        }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       const { escrow } = await res.json();
       const url = `${window.location.origin}/escrow/${escrow.id}`;
       setCreatedLink(url);
-      setTitle(""); setAmount(""); setDescription(""); setSellerContact("");
+      setTitle(""); setAmount(""); setDescription(""); setSellerContact(""); setDeliveryDays("7");
       fetchEscrows();
     } catch (err: any) {
       setCreateError(err.message ?? "Something went wrong.");
@@ -130,12 +138,22 @@ export default function EscrowPage() {
     ACTIVE: escrows.filter(e => e.status === "ACTIVE").length,
     HOLDING: escrows.filter(e => e.status === "HOLDING").length,
     RELEASED: escrows.filter(e => ["RELEASED", "CONFIRMED"].includes(e.status)).length,
-    DISPUTED: escrows.filter(e => e.status === "DISPUTED").length,
+    DISPUTED: escrows.filter(e => ["DISPUTED", "MEDIATION"].includes(e.status)).length,
   };
 
   const totalHeld = escrows.filter(e => e.status === "HOLDING").reduce((s, e) => s + parseFloat(e.amount), 0);
   const totalReleased = escrows.filter(e => ["RELEASED", "CONFIRMED"].includes(e.status)).reduce((s, e) => s + parseFloat(e.amount), 0);
   const fmt = (n: number) => n % 1 === 0 ? n.toString() : n.toFixed(2);
+
+  const DELIVERY_PRESETS = [
+    { label: "1 day", days: 1 },
+    { label: "3 days", days: 3 },
+    { label: "1 week", days: 7 },
+    { label: "2 weeks", days: 14 },
+    { label: "1 month", days: 30 },
+    { label: "2 months", days: 60 },
+    { label: "3 months", days: 90 },
+  ];
 
   return (
     <div className="app">
@@ -200,9 +218,9 @@ export default function EscrowPage() {
                     </div>
                   </div>
                   <p style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 12, lineHeight: 1.6 }}>
-                    Share this link with your buyer. They pay → funds are held → you deliver → they confirm → you receive payment.
+                    Share this link with your buyer. They pay → funds are held → you deliver → they confirm after delivery window → you receive payment.
                   </p>
-                  <button className="form-another-btn" onClick={() => { setCreatedLink(null); }}>+ Create another</button>
+                  <button className="form-another-btn" onClick={() => setCreatedLink(null)}>+ Create another</button>
                 </div>
               ) : (
                 <form onSubmit={createEscrow}>
@@ -223,16 +241,40 @@ export default function EscrowPage() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Your Contact</label>
-                    <input type="text" className="input" placeholder="e.g. @ayomide on Telegram, +234..." value={sellerContact} onChange={e => setSellerContact(e.target.value)} maxLength={100} required />
+                    <input type="text" className="input" placeholder="e.g. @ace_must_win on Telegram, +234..." value={sellerContact} onChange={e => setSellerContact(e.target.value)} maxLength={100} required />
                     <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>Required — buyer needs this to arrange delivery</div>
                   </div>
+
+                  {/* Delivery window */}
+                  <div className="form-group">
+                    <label className="form-label">Expected Delivery Window</label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                      {DELIVERY_PRESETS.map(p => (
+                        <button
+                          key={p.days} type="button"
+                          onClick={() => setDeliveryDays(p.days.toString())}
+                          style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${parseInt(deliveryDays) === p.days ? "var(--c)" : "var(--stroke)"}`, background: parseInt(deliveryDays) === p.days ? "var(--c-dim)" : "transparent", color: parseInt(deliveryDays) === p.days ? "var(--c)" : "var(--ink-3)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "Sora, sans-serif", transition: "all .15s" }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="form-input-wrap">
+                      <input type="number" className="input mono" placeholder="7" value={deliveryDays} onChange={e => setDeliveryDays(e.target.value)} min="1" max="365" required style={{ paddingRight: 52 }} />
+                      <span className="form-input-suffix">days</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 6 }}>
+                      Buyer can only confirm or dispute after this window passes. Auto-releases 7 days after delivery deadline.
+                    </div>
+                  </div>
+
                   <div className="stealth-info-box" style={{ marginBottom: 16 }}>
                     <svg viewBox="0 0 16 16" fill="none" width="14" height="14" style={{ flexShrink: 0, marginTop: 1 }}>
                       <rect x="2" y="6" width="12" height="9" rx="1.5" stroke="var(--c)" strokeWidth="1.3" />
                       <path d="M5 6V4.5a3 3 0 016 0V6" stroke="var(--c)" strokeWidth="1.3" strokeLinecap="round" />
                     </svg>
                     <p style={{ fontSize: 11, color: "var(--c)", lineHeight: 1.5 }}>
-                      Funds are held in an escrow wallet for 7 days. Auto-releases to you if buyer doesn't confirm. Buyer can raise a dispute at any time.
+                      Funds are held securely. Buyer cannot confirm or dispute until the delivery window passes. Auto-releases 7 days after delivery deadline.
                     </p>
                   </div>
                   {createError && <div className="form-error">{createError}</div>}
@@ -245,7 +287,6 @@ export default function EscrowPage() {
           </div>
         )}
 
-        {/* Not connected */}
         {mounted && !isConnected && (
           <div className="empty" style={{ paddingTop: 80 }}>
             <div className="empty-icon">
@@ -284,7 +325,6 @@ export default function EscrowPage() {
 
             <div style={{ overflowY: "auto", maxHeight: 520 }}>
               {isLoading && <div className="loading-center" style={{ height: 160 }}><div className="page-spinner" /></div>}
-
               {!isLoading && filtered.length === 0 && (
                 <div className="table-empty">
                   <div className="table-empty-icon">
@@ -301,35 +341,29 @@ export default function EscrowPage() {
                     <div className="table-cell-title-name">
                       <span className="table-cell-status-dot" style={{ background: statusColor(e.status) }} />
                       <span className="table-cell-title-text">{e.title}</span>
-                      {e.status === "DISPUTED" && <span style={{ fontSize: 9, background: "rgba(240,62,95,.15)", color: "var(--danger)", border: "1px solid rgba(240,62,95,.3)", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>DISPUTE</span>}
+                      {["DISPUTED", "MEDIATION"].includes(e.status) && <span style={{ fontSize: 9, background: "rgba(240,62,95,.15)", color: "var(--danger)", border: "1px solid rgba(240,62,95,.3)", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>DISPUTE</span>}
                     </div>
                     {e.description && <p className="table-cell-description">{e.description}</p>}
-                    {e.status === "HOLDING" && e.releaseDeadline && <Countdown deadline={e.releaseDeadline} />}
+                    {e.deliveryDays && e.status === "HOLDING" && <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, fontFamily: "IBM Plex Mono, monospace" }}>Delivery: {e.deliveryDays} day{e.deliveryDays > 1 ? "s" : ""}</p>}
+                    {e.status === "HOLDING" && e.deliveryDeadline && <Countdown deadline={e.deliveryDeadline} label="Delivery in" />}
                     {e.disputeReason && <p style={{ fontSize: 10, color: "var(--danger)", marginTop: 3 }}>"{e.disputeReason}"</p>}
                     {e.releaseTxHash && (
-                      <a href={`https://testnet.arcscan.app/tx/${e.releaseTxHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">
-                        released ↗
-                      </a>
+                      <a href={`https://testnet.arcscan.app/tx/${e.releaseTxHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">released ↗</a>
                     )}
                   </div>
-
                   <div>
                     <span className={`status-badge ${statusClass(e.status)}`}>
                       <span className="status-badge-dot" />
                       {e.status}
                     </span>
                   </div>
-
                   <div>
                     <span className="table-amount">{parseFloat(e.amount) % 1 === 0 ? e.amount : parseFloat(e.amount).toFixed(2)}<span className="table-amount-unit">USDC</span></span>
                   </div>
-
                   <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>
                     {e.buyerAddress ? `${e.buyerAddress.slice(0, 6)}...${e.buyerAddress.slice(-4)}` : "—"}
                   </span>
-
                   <span className="table-date">{formatDate(e.createdAt)}</span>
-
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     {e.status === "ACTIVE" && (
                       <>
@@ -339,10 +373,10 @@ export default function EscrowPage() {
                         </button>
                       </>
                     )}
-                    {e.status === "HOLDING" && <span style={{ fontSize: 11, color: "var(--info)", fontFamily: "IBM Plex Mono, monospace" }}>Awaiting confirmation</span>}
+                    {e.status === "HOLDING" && <span style={{ fontSize: 11, color: "var(--info)", fontFamily: "IBM Plex Mono, monospace" }}>Awaiting delivery</span>}
                     {e.status === "CONFIRMED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>Releasing...</span>}
                     {e.status === "RELEASED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>✓ Released</span>}
-                    {e.status === "DISPUTED" && <span style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace" }}>Admin review</span>}
+                    {["DISPUTED", "MEDIATION"].includes(e.status) && <span style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace" }}>Admin review</span>}
                     {e.status === "CANCELLED" && <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Cancelled</span>}
                   </div>
                 </div>
@@ -350,7 +384,6 @@ export default function EscrowPage() {
             </div>
           </div>
         )}
-
       </div>
       <footer className="app-footer">
         <span>Conduit v0.1.0</span>

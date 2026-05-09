@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
   if (!sellerContact?.trim()) return NextResponse.json({ error: "Contact is required." }, { status: 400 });
   const parsed = parseFloat(amount);
   if (isNaN(parsed) || parsed <= 0) return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
-  const parsedDays = parseInt(deliveryDays);
-  if (isNaN(parsedDays) || parsedDays < 1) return NextResponse.json({ error: "Enter a valid delivery window." }, { status: 400 });
+  const parsedDays = deliveryDays ? parseInt(deliveryDays) : 7;
+if (isNaN(parsedDays) || parsedDays < 1) return NextResponse.json({ error: "Enter a valid delivery window." }, { status: 400 });
 
   const wallet = generateStealthWallet();
   const escrow = await db.escrowLink.create({
