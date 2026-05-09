@@ -100,6 +100,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -179,12 +180,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
       setLocalDeadline(data.releaseDeadline);
       setLocalDeliveryDeadline(data.deliveryDeadline);
       setPayStep("done");
-      try {
-        const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
-        const updated = [{ id: escrow.id, title: escrow.title, amount: escrow.amount, paidAt: new Date().toISOString() }, ...existing.filter((o: any) => o.id !== escrow.id)].slice(0, 20);
-        localStorage.setItem("conduit-escrow-orders", JSON.stringify(updated));
-      } catch { }
-      // Save to localStorage so buyer can find this order later
       try {
         const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
         const updated = [{ id: escrow.id, title: escrow.title, amount: escrow.amount, paidAt: new Date().toISOString() }, ...existing.filter((o: any) => o.id !== escrow.id)].slice(0, 20);
@@ -382,6 +377,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
             {error && <p style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{error}</p>}
             <div style={{ display: "flex", gap: 8 }}>
               <textarea
+                autoFocus
                 value={newMessage}
                 onChange={e => setNewMessage(e.target.value)}
                 placeholder={role === "SELLER" ? "Submit your evidence — proof of delivery, tracking info, ArcScan links..." : "Add more details about your dispute..."}
@@ -532,7 +528,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           {deliveryPassed && showDisputeForm && (
             <div style={{ textAlign: "left", marginTop: 8 }}>
               <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
-              <textarea autoFocus value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
+              <textarea ref={disputeTextareaRef} autoFocus value={disputeReason} onChange={e => setDisputeReason(e.target.value)}
                 placeholder="e.g. Item not delivered, wrong item received..."
                 style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
               />
@@ -552,17 +548,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
             </p>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 16 }}>
-            {(txHash || escrow.txHash) && (
-              <a href={`https://testnet.arcscan.app/tx/${txHash ?? escrow.txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link">
-                View payment on ArcScan ↗
-              </a>
-            )}
-            <a href="/" style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 22px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-md)", fontSize: 13, fontWeight: 700, color: "var(--ink-2)", textDecoration: "none" }}>
-              <svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Back to Conduit
-            </a>
-          </div>
+          {txHash && <a href={`https://testnet.arcscan.app/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="pay-tx-link" style={{ display: "block", marginTop: 16 }}>View payment on ArcScan ↗</a>}
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
