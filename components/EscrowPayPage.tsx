@@ -533,7 +533,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
                 onChange={e => setDisputeReason(e.target.value)}
                 onFocus={e => { const len = e.target.value.length; e.target.setSelectionRange(len, len); }}
                 placeholder="e.g. Item not delivered, wrong item received..."
-                style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
+                style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none", direction: "ltr" as const, textAlign: "left" as const }}
               />
               {error && <div className="pay-err-box" style={{ marginTop: 8 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>

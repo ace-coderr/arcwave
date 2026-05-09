@@ -5,6 +5,17 @@
 @tailwind components;
 @tailwind utilities;
 
+* {
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+textarea,
+input {
+  direction: ltr;
+  text-align: left;
+}
+
 /* ════════════════════════════════════════
    CONDUIT  ·  Design Tokens
    ════════════════════════════════════════ */
