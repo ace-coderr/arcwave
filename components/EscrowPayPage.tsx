@@ -134,7 +134,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
 
   useEffect(() => {
     if (showDisputeForm) {
-      const t = setTimeout(() => disputeTextareaRef.current?.focus(), 100);
+      const t = setTimeout(() => disputeTextareaRef.current?.focus(), 50);
       return () => clearTimeout(t);
     }
   }, [showDisputeForm]);
@@ -499,27 +499,23 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         </div>
       </div>
 
-      {/* Dispute form is OUTSIDE pay-actions div to avoid textAlign:center causing RTL cursor behavior */}
-      {deliveryPassed && showDisputeForm && (
-        <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
-          <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
-          <textarea
-            ref={disputeTextareaRef}
-            value={disputeReason}
-            onChange={e => setDisputeReason(e.target.value)}
-            placeholder="e.g. Item not delivered, wrong item received..."
-            style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
-          />
-          {error && <div className="pay-err-box" style={{ marginTop: 8 }}>{error}</div>}
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => { setShowDisputeForm(false); setError(""); setDisputeReason(""); }} style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>Cancel</button>
-            <button onClick={handleDispute} disabled={disputing} style={{ flex: 2, padding: "10px", background: "var(--danger)", border: "none", borderRadius: "var(--r-sm)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: disputing ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: disputing ? .5 : 1 }}>
-              {disputing ? "Submitting..." : "Submit Dispute"}
-            </button>
-          </div>
+      <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px", display: deliveryPassed && showDisputeForm ? "block" : "none" }}>
+        <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
+        <textarea
+          ref={disputeTextareaRef}
+          value={disputeReason}
+          onChange={e => setDisputeReason(e.target.value)}
+          placeholder="e.g. Item not delivered, wrong item received..."
+          style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
+        />
+        {error && <div className="pay-err-box" style={{ marginTop: 8 }}>{error}</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={() => { setShowDisputeForm(false); setError(""); setDisputeReason(""); }} style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>Cancel</button>
+          <button onClick={handleDispute} disabled={disputing} style={{ flex: 2, padding: "10px", background: "var(--danger)", border: "none", borderRadius: "var(--r-sm)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: disputing ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: disputing ? .5 : 1 }}>
+            {disputing ? "Submitting..." : "Submit Dispute"}
+          </button>
         </div>
-      )}
-
+      </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
     </div>
   );
