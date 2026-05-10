@@ -100,6 +100,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const disputeFocusedRef = useRef(false);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -133,8 +134,12 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   }, [messages]);
 
   useLayoutEffect(() => {
-    if (showDisputeForm && disputeTextareaRef.current) {
+    if (showDisputeForm && disputeTextareaRef.current && !disputeFocusedRef.current) {
       disputeTextareaRef.current.focus();
+      disputeFocusedRef.current = true;
+    }
+    if (!showDisputeForm) {
+      disputeFocusedRef.current = false;
     }
   }, [showDisputeForm]);
 
