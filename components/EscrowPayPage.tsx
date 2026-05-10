@@ -496,7 +496,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
           <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
           <textarea
-            autoFocus
+            ref={el => { if (el) el.focus(); }}
             value={disputeReason}
             onChange={e => setDisputeReason(e.target.value)}
             placeholder="e.g. Item not delivered, wrong item received..."
