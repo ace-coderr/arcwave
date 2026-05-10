@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import {
   useAccount, useConnect, useDisconnect,
   useSendTransaction, useWaitForTransactionReceipt,
@@ -93,11 +93,11 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [localStatus, setLocalStatus] = useState(escrow.status);
   const [localDeadline, setLocalDeadline] = useState(escrow.releaseDeadline);
   const [localDeliveryDeadline, setLocalDeliveryDeadline] = useState(escrow.deliveryDeadline);
-
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -132,13 +132,19 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useLayoutEffect(() => {
+    if (showDisputeForm && disputeTextareaRef.current) {
+      disputeTextareaRef.current.focus();
+    }
+  }, [showDisputeForm]);
+
   useEffect(() => {
     if (paymentConfirmed && txHash && payStep === "sending_payment") {
       setPayStep("sending_fee");
       sendFee(
         { to: FEE_COLLECTOR as `0x${string}`, value: parseEther(feeAmount), chainId: arcTestnet.id },
         {
-          onSuccess: (hash) => { setFeeTxHash(hash); },
+          onSuccess: (h) => { setFeeTxHash(h); },
           onError: () => { setPayStep("idle"); setError("Fee transaction failed. Please try again."); },
         }
       );
@@ -189,7 +195,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     sendPayment(
       { to: escrow.stealthAddress as `0x${string}`, value: parseEther(escrow.amount), chainId: arcTestnet.id },
       {
-        onSuccess: (hash) => { setTxHash(hash); },
+        onSuccess: (h) => { setTxHash(h); },
         onError: (err: Error) => {
           setPayStep("idle");
           setError(err.message?.includes("rejected") || err.message?.includes("denied") ? "Transaction rejected." : "Transaction failed.");
@@ -359,6 +365,8 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     </div>
   );
 
+  // ── STATUS SCREENS ─────────────────────────────────────────────
+
   if (localStatus === "CANCELLED") return (
     <div className="pay-page"><Logo /><p className="pay-tagline">ESCROW</p>
       <div className="pay-card"><div className="pay-card-bar" />
@@ -470,10 +478,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           )}
 
           {deliveryPassed && !showDisputeForm && (
-            <button onClick={() => {
-              setShowDisputeForm(true);
-              setTimeout(() => disputeTextareaRef.current?.focus(), 50);
-            }}
+            <button onClick={() => setShowDisputeForm(true)}
               style={{ width: "100%", padding: "12px", background: "transparent", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-md)", color: "var(--danger)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>
               Raise a Dispute
             </button>
@@ -495,7 +500,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         </div>
       </div>
 
-      {/* Dispute form is OUTSIDE pay-actions div to avoid textAlign:center causing RTL cursor behavior */}
+      {/* Dispute form outside pay-actions to prevent textAlign:center RTL cursor bug */}
       {deliveryPassed && showDisputeForm && (
         <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
           <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
@@ -520,6 +525,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     </div>
   );
 
+  // Main pay page
   return (
     <div className="pay-page">
       <Logo />
