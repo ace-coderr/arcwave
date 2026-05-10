@@ -93,12 +93,12 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [localDeadline, setLocalDeadline] = useState(escrow.releaseDeadline);
   const [localDeliveryDeadline, setLocalDeliveryDeadline] = useState(escrow.deliveryDeadline);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -242,18 +242,19 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !address) return;
+    const msg = messageInputRef.current?.value ?? "";
+    if (!msg.trim() || !address) return;
     setSendingMessage(true);
     try {
       const res = await fetch(`/api/escrow/${escrow.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: newMessage.trim(), senderAddress: address }),
+        body: JSON.stringify({ message: msg.trim(), senderAddress: address }),
       });
       if (res.ok) {
         const data = await res.json();
         setMessages(prev => [...prev, data.message]);
-        setNewMessage("");
+        if (messageInputRef.current) messageInputRef.current.value = "";
         const escrowRes = await fetch(`/api/escrow/${escrow.id}`);
         if (escrowRes.ok) { const escrowData = await escrowRes.json(); setLocalStatus(escrowData.escrow.status); setEscrow(escrowData.escrow); }
         fetchMessages();
@@ -280,6 +281,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
     return { maxWidth: "80%", padding: "10px 14px", borderRadius: 10, fontSize: 12, lineHeight: 1.5, alignSelf: isMine ? "flex-end" : "flex-start", background: isMine ? "var(--c-dim)" : "var(--raised)", border: `1px solid ${isMine ? "var(--c-border)" : "var(--stroke)"}`, color: "var(--ink-1)" };
   };
 
+  // Called as MediationThread() not <MediationThread /> — prevents remount on parent re-render
   const MediationThread = () => (
     <div style={{ marginTop: 20 }}>
       <div style={{ background: "rgba(240,62,95,.06)", border: "1px solid rgba(240,62,95,.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
@@ -338,13 +340,17 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
             {error && <p style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{error}</p>}
             <div style={{ display: "flex", gap: 8 }}>
               <textarea
-                value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
+                ref={messageInputRef}
+                defaultValue=""
                 placeholder={role === "SELLER" ? "Submit your evidence — proof of delivery, tracking info, ArcScan links..." : "Add more details about your dispute..."}
                 style={{ flex: 1, padding: "8px 12px", background: "var(--bg)", border: "1px solid var(--stroke)", borderRadius: 8, color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "none", minHeight: 60, outline: "none" }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
               />
-              <button onClick={sendMessage} disabled={sendingMessage || !newMessage.trim()} style={{ padding: "8px 16px", background: role === "SELLER" ? "var(--c)" : "rgba(91,143,249,.8)", border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, cursor: sendingMessage || !newMessage.trim() ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", alignSelf: "flex-end", opacity: !newMessage.trim() ? .4 : 1 }}>
+              <button
+                onClick={sendMessage}
+                disabled={sendingMessage}
+                style={{ padding: "8px 16px", background: role === "SELLER" ? "var(--c)" : "rgba(91,143,249,.8)", border: "none", borderRadius: 8, color: "#000", fontSize: 12, fontWeight: 700, cursor: sendingMessage ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", alignSelf: "flex-end", opacity: sendingMessage ? .4 : 1 }}
+              >
                 {sendingMessage ? "..." : "Send"}
               </button>
             </div>
@@ -405,7 +411,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
           <p style={{ fontSize: 22, fontWeight: 800, color: "#5b8ff9", fontFamily: "IBM Plex Mono, monospace" }}>{fmt(parseFloat(escrow.amount))} <span style={{ fontSize: 13 }}>USDC</span></p>
         </div>
         <div style={{ padding: "0 24px 24px" }}>
-          {mounted && <MediationThread />}
+          {mounted && MediationThread()}
         </div>
       </div>
       <p className="pay-powered">Powered by Arc Network & Circle</p>
@@ -494,7 +500,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         </div>
       </div>
 
-      {/* Dispute form — uncontrolled textarea to prevent focus loss on re-render */}
+      {/* Dispute form — uncontrolled textarea, rendered outside pay-actions */}
       {deliveryPassed && showDisputeForm && (
         <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
           <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
