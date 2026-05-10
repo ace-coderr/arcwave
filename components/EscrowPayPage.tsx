@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useAccount, useConnect, useDisconnect,
   useSendTransaction, useWaitForTransactionReceipt,
@@ -89,7 +89,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [confirming, setConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputing, setDisputing] = useState(false);
-  const [disputeReason, setDisputeReason] = useState("");
   const [localStatus, setLocalStatus] = useState(escrow.status);
   const [localDeadline, setLocalDeadline] = useState(escrow.releaseDeadline);
   const [localDeliveryDeadline, setLocalDeliveryDeadline] = useState(escrow.deliveryDeadline);
@@ -100,7 +99,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const disputeFocusedRef = useRef(false);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -132,16 +130,6 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  useLayoutEffect(() => {
-    if (showDisputeForm && disputeTextareaRef.current && !disputeFocusedRef.current) {
-      disputeTextareaRef.current.focus();
-      disputeFocusedRef.current = true;
-    }
-    if (!showDisputeForm) {
-      disputeFocusedRef.current = false;
-    }
-  }, [showDisputeForm]);
 
   useEffect(() => {
     if (paymentConfirmed && txHash && payStep === "sending_payment") {
@@ -229,18 +217,19 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   };
 
   const handleDispute = async () => {
-    if (!disputeReason.trim()) { setError("Please describe the issue."); return; }
+    const reason = disputeTextareaRef.current?.value ?? "";
+    if (!reason.trim()) { setError("Please describe the issue."); return; }
     setDisputing(true);
     try {
       const res = await fetch(`/api/escrow/${escrow.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "dispute", disputeReason }),
+        body: JSON.stringify({ action: "dispute", disputeReason: reason }),
       });
       if (res.ok) {
         const data = await res.json();
         setLocalStatus("DISPUTED");
-        setEscrow(prev => ({ ...prev, disputeDeadline: data.disputeDeadline, disputeReason }));
+        setEscrow(prev => ({ ...prev, disputeDeadline: data.disputeDeadline, disputeReason: reason }));
         try {
           const existing = JSON.parse(localStorage.getItem("conduit-escrow-orders") ?? "[]");
           localStorage.setItem("conduit-escrow-orders", JSON.stringify(existing.filter((o: any) => o.id !== escrow.id)));
@@ -505,20 +494,29 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         </div>
       </div>
 
-      {/* Dispute form outside pay-actions to prevent textAlign:center RTL cursor bug */}
+      {/* Dispute form — uncontrolled textarea to prevent focus loss on re-render */}
       {deliveryPassed && showDisputeForm && (
         <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
           <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
           <textarea
             ref={disputeTextareaRef}
-            value={disputeReason}
-            onChange={e => setDisputeReason(e.target.value)}
+            autoFocus
+            defaultValue=""
             placeholder="e.g. Item not delivered, wrong item received..."
             style={{ width: "100%", padding: "10px 12px", background: "var(--raised)", border: "1px solid rgba(240,62,95,.3)", borderRadius: "var(--r-sm)", color: "var(--ink-1)", fontSize: 12, fontFamily: "Sora, sans-serif", resize: "vertical", minHeight: 80, boxSizing: "border-box" as const, outline: "none" }}
           />
           {error && <div className="pay-err-box" style={{ marginTop: 8 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => { setShowDisputeForm(false); setError(""); setDisputeReason(""); }} style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}>Cancel</button>
+            <button
+              onClick={() => {
+                setShowDisputeForm(false);
+                setError("");
+                if (disputeTextareaRef.current) disputeTextareaRef.current.value = "";
+              }}
+              style={{ flex: 1, padding: "10px", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", color: "var(--ink-2)", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Sora, sans-serif" }}
+            >
+              Cancel
+            </button>
             <button onClick={handleDispute} disabled={disputing} style={{ flex: 2, padding: "10px", background: "var(--danger)", border: "none", borderRadius: "var(--r-sm)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: disputing ? "not-allowed" : "pointer", fontFamily: "Sora, sans-serif", opacity: disputing ? .5 : 1 }}>
               {disputing ? "Submitting..." : "Submit Dispute"}
             </button>
