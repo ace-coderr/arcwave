@@ -99,6 +99,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   const [sendingMessage, setSendingMessage] = useState(false);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const disputeTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { address, isConnected, chainId } = useAccount();
   const { connect } = useConnect();
@@ -130,6 +131,13 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (showDisputeForm) {
+      const t = setTimeout(() => disputeTextareaRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [showDisputeForm]);
 
   useEffect(() => {
     if (paymentConfirmed && txHash && payStep === "sending_payment") {
@@ -496,7 +504,7 @@ export function EscrowPayPage({ escrow: initialEscrow }: { escrow: EscrowData })
         <div style={{ width: "100%", maxWidth: 480, margin: "12px auto 0", padding: "0 24px" }}>
           <p style={{ fontSize: 12, color: "var(--danger)", fontWeight: 700, marginBottom: 8 }}>Describe the issue:</p>
           <textarea
-            ref={el => { if (el) el.focus(); }}
+            ref={disputeTextareaRef}
             value={disputeReason}
             onChange={e => setDisputeReason(e.target.value)}
             placeholder="e.g. Item not delivered, wrong item received..."
