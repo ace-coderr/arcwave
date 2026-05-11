@@ -82,8 +82,6 @@ export function NavBar() {
             <Link
               key={l.href}
               href={(l as any).soon ? "#" : l.href}
-              target={l.href === "/escrow" ? "_blank" : undefined}
-              rel={l.href === "/escrow" ? "noopener noreferrer" : undefined}
               className={`nav-link${pathname === l.href ? " active" : ""}`}
               style={(l as any).soon ? { pointerEvents: "none", opacity: 0.4 } : {}}
             >
@@ -149,8 +147,6 @@ export function NavBar() {
           <Link
             key={l.href}
             href={(l as any).soon ? "#" : l.href}
-            target={l.href === "/escrow" ? "_blank" : undefined}
-            rel={l.href === "/escrow" ? "noopener noreferrer" : undefined}
             className={`nav-link${pathname === l.href ? " active" : ""}`}
             style={(l as any).soon ? { pointerEvents: "none", opacity: 0.4 } : {}}
           >
