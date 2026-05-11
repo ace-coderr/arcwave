@@ -85,7 +85,7 @@ const IconX = ({ size = 36, color = "var(--danger)" }: { size?: number; color?: 
 function Logo() {
   return (
     <div className="pay-logo">
-      <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 32, width: "auto", objectFit: "contain" }}/>
+      <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 58, width: "auto", objectFit: "contain" }}/>
     </div>
   );
 }

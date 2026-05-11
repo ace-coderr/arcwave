@@ -71,9 +71,9 @@ export function NavBar() {
       <nav className="nav">
         <Link href="/" className="nav-logo">
           {mounted ? (
-            <Image src={logoSrc} alt="Conduit" width={140} height={52} style={{ height: 100, width: "auto", objectFit: "contain" }} priority />
+            <Image src={logoSrc} alt="Conduit" width={140} height={52} style={{ height: 58, width: "auto", objectFit: "contain" }} priority />
           ) : (
-            <Image src="/conduit-logo-white.png" alt="Conduit" width={140} height={52} style={{ height: 100, width: "auto", objectFit: "contain" }} priority />
+            <Image src="/conduit-logo-white.png" alt="Conduit" width={140} height={52} style={{ height: 58, width: "auto", objectFit: "contain" }} priority />
           )}
         </Link>
 
