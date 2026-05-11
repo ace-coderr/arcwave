@@ -18,6 +18,7 @@ interface PaymentLink {
   createdAt: string;
   paidAt?: string;
   isEscrow?: boolean;
+  isRefunded?: boolean;
 }
 
 type Filter = "ALL" | "ACTIVE" | "COMPLETED" | "EXPIRED";
@@ -61,8 +62,8 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
       marginTop: 3,
     }}>
       <svg viewBox="0 0 12 12" fill="none" width="9" height="9">
-        <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M6 3.5v2.8l1.2.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+        <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+        <path d="M6 3.5v2.8l1.2.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
       </svg>
       {timeLeft}
     </span>
@@ -183,7 +184,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
 
         {(!mounted || isLoading) && (
           <div className="loading-center" style={{ height: 160 }}>
-            <div className="page-spinner"/>
+            <div className="page-spinner" />
           </div>
         )}
 
@@ -191,8 +192,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           <div className="table-not-connected">
             <div className="table-not-connected-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5"/>
-                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5" />
+                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
             <p className="table-not-connected-text">Wallet not connected</p>
@@ -204,8 +205,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           <div className="table-empty">
             <div className="table-empty-icon">
               <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
             <p className="table-empty-title">{filter === "ALL" ? "No payment links yet" : `No ${filter.toLowerCase()} links`}</p>
@@ -217,11 +218,11 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
           <>
             {[1, 2, 3].map((i) => (
               <div key={i} className="table-skeleton-row">
-                <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }}/><div className="skeleton" style={{ width: "40%", height: 10 }}/></div>
-                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }}/>
-                <div className="skeleton" style={{ width: 70, height: 14 }}/>
-                <div className="skeleton" style={{ width: 80, height: 12 }}/>
-                <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }}/><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }}/></div>
+                <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }} /><div className="skeleton" style={{ width: "40%", height: 10 }} /></div>
+                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
+                <div className="skeleton" style={{ width: 70, height: 14 }} />
+                <div className="skeleton" style={{ width: 80, height: 12 }} />
+                <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /></div>
               </div>
             ))}
           </>
@@ -232,11 +233,14 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
             {/* Title */}
             <div className="table-cell-title">
               <div className="table-cell-title-name">
-                <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }}/>
+                <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }} />
                 <span className="table-cell-title-text">{link.title}</span>
                 {link.stealthAddress && <span className="stealth-badge">🔒 stealth</span>}
-                {(link as any).isEscrow && (
+                {(link as any).isEscrow && !(link as any).isRefunded && (
                   <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", background: "rgba(91,143,249,.12)", border: "1px solid rgba(91,143,249,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em" }}>ESCROW</span>
+                )}
+                {(link as any).isRefunded && (
+                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "var(--danger)", background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em" }}>REFUNDED</span>
                 )}
                 {link.expiresAt && link.status === "ACTIVE" && (
                   <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: 4, padding: "1px 5px" }}>
@@ -247,7 +251,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
               {link.description && <p className="table-cell-description">{link.description}</p>}
               {/* Expiry countdown */}
               {link.expiresAt && link.status === "ACTIVE" && (
-                <Countdown expiresAt={link.expiresAt}/>
+                <Countdown expiresAt={link.expiresAt} />
               )}
               {link.txHash && (
                 <a href={`https://testnet.arcscan.app/tx/${link.txHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">
@@ -259,7 +263,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
             {/* Status */}
             <div>
               <span className={`status-badge ${statusClass(link.status)}`}>
-                <span className="status-badge-dot"/>
+                <span className="status-badge-dot" />
                 {link.status}
               </span>
               {link.status === "COMPLETED" && (

@@ -598,7 +598,7 @@ export default function AdminPage() {
                         <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "var(--c)", background: "var(--c-dim)", border: "1px solid var(--c-border)", borderRadius: 4, padding: "1px 5px" }}>PAYMENT</span>
                       )}
                     </div>
-                    <span style={{ fontSize: 13, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: (tx as any).isRefunded ? "var(--danger)" : "var(--c)" }}>{(tx as any).isRefunded ? "—" : fmt(parseFloat(tx.amount))}</span>
+                    <span style={{ fontSize: 13, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: (tx as any).isRefunded ? "var(--danger)" : "var(--c)" }}>{(tx as any).isRefunded ? `-${fmt(parseFloat(tx.amount))}` : `+${fmt(parseFloat(tx.amount))}`} <span style={{ fontSize: 10, color: "var(--ink-3)" }}>USDC</span></span>
                     <span style={{ fontSize: 11, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-2)" }}>{tx.recipientAddress.slice(0, 6)}...{tx.recipientAddress.slice(-4)}</span>
                     <span style={{ fontSize: 11, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)" }}>{tx.paidBy ? `${tx.paidBy.slice(0, 6)}...${tx.paidBy.slice(-4)}` : "—"}</span>
                     <span style={{ fontSize: 10, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)" }}>{fmtDate(tx.paidAt ?? tx.createdAt)}</span>

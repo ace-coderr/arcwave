@@ -223,10 +223,8 @@ export default function TransactionsPage() {
                 </div>
 
                 <span className="tx-amount" style={{ color: tx.isRefunded ? "var(--danger)" : undefined }}>
-                  {tx.isRefunded ? "—" : `+${formatUSDC(tx.amount)}`}
-                  {!tx.isRefunded && (
-                    <span style={{ fontSize: 10, color: tx.isEscrow ? "#5b8ff9" : "var(--c)", marginLeft: 3, fontWeight: 700 }}>USDC</span>
-                  )}
+                  {tx.isRefunded ? `-${formatUSDC(tx.amount)}` : `+${formatUSDC(tx.amount)}`}
+                  <span style={{ fontSize: 10, color: tx.isRefunded ? "var(--danger)" : tx.isEscrow ? "#5b8ff9" : "var(--c)", marginLeft: 3, fontWeight: 700 }}>USDC</span>
                 </span>
 
                 <span className="tx-from">
