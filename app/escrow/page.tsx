@@ -90,20 +90,6 @@ export default function EscrowPage() {
 
   useEffect(() => { if (isConnected && address) fetchEscrows(); }, [isConnected, address, fetchEscrows]);
 
-  useEffect(() => {
-    if (!address) return;
-    fetch(`/api/escrow/buyer?address=${address}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.escrows?.length) {
-          setBuyerOrders(data.escrows.map((e: any) => ({
-            id: e.id, title: e.title, amount: e.amount, paidAt: e.paidAt ?? e.createdAt,
-          })));
-        }
-      })
-      .catch(() => { });
-  }, [address]);
-
   const createEscrow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address) return;
@@ -338,7 +324,7 @@ export default function EscrowPage() {
                     <p style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace", marginTop: 2 }}>Paid {new Date(order.paidAt).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}</p>
                   </div>
                   <span style={{ fontSize: 13, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", flexShrink: 0 }}>{parseFloat(order.amount) % 1 === 0 ? order.amount : parseFloat(order.amount).toFixed(2)} <span style={{ fontSize: 10, color: "var(--ink-3)" }}>USDC</span></span>
-                  <a href={`/escrow/${order.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", background: "rgba(91,143,249,.1)", border: "1px solid rgba(91,143,249,.25)", borderRadius: "var(--r-sm)", fontSize: 11, fontWeight: 700, color: "#5b8ff9", textDecoration: "none", flexShrink: 0 }}>
+                  <a href={`/escrow/${order.id}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 14px", background: "rgba(91,143,249,.1)", border: "1px solid rgba(91,143,249,.25)", borderRadius: "var(--r-sm)", fontSize: 11, fontWeight: 700, color: "#5b8ff9", textDecoration: "none", flexShrink: 0 }}>
                     View Order
                     <svg viewBox="0 0 12 12" fill="none" width="10" height="10"><path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </a>
@@ -428,11 +414,7 @@ export default function EscrowPage() {
                     {e.status === "HOLDING" && <span style={{ fontSize: 11, color: "var(--info)", fontFamily: "IBM Plex Mono, monospace" }}>Awaiting delivery</span>}
                     {e.status === "CONFIRMED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>Releasing...</span>}
                     {e.status === "RELEASED" && <span style={{ fontSize: 11, color: "var(--c)", fontFamily: "IBM Plex Mono, monospace" }}>✓ Released</span>}
-                    {["DISPUTED", "MEDIATION"].includes(e.status) && (
-                      <a href={`/escrow/${e.id}`} style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none", fontWeight: 700 }}>
-                        View Dispute →
-                      </a>
-                    )}
+                    {["DISPUTED", "MEDIATION"].includes(e.status) && <a href={`/escrow/${e.id}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "var(--danger)", fontFamily: "IBM Plex Mono, monospace", textDecoration: "none", fontWeight: 700 }}>View Dispute →</a>}
                     {e.status === "CANCELLED" && <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>Cancelled</span>}
                   </div>
                 </div>
