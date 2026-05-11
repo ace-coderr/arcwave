@@ -8,11 +8,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const queryWallet = searchParams.get("wallet")?.toLowerCase();
   const caller = wallet ?? queryWallet ?? "";
-
   if (caller !== ADMIN_WALLET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   try {
     const [links, escrows] = await Promise.all([
       db.paymentLink.findMany({
@@ -28,14 +26,15 @@ export async function GET(req: NextRequest) {
         select: {
           id: true, title: true, amount: true, status: true,
           sellerAddress: true, buyerAddress: true, stealthAddress: true,
-          txHash: true, releaseTxHash: true,
-          paidAt: true, releaseDeadline: true, confirmedAt: true,
-          disputedAt: true, disputeReason: true, sellerContact: true,
+          txHash: true, releaseTxHash: true, feeTxHash: true,
+          paidAt: true, deliveryDays: true, deliveryDeadline: true,
+          releaseDeadline: true, confirmedAt: true,
+          disputedAt: true, disputeReason: true, disputeDeadline: true,
+          sellerContact: true, sellerRespondedAt: true, buyerLastMessageAt: true,
           createdAt: true,
         },
       }),
     ]);
-
     return NextResponse.json({ links, escrows });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
