@@ -29,7 +29,6 @@ function shortenAddr(a: string) {
 
 function Countdown({ expiresAt }: { expiresAt: string }) {
   const [timeLeft, setTimeLeft] = useState("");
-
   useEffect(() => {
     const update = () => {
       const diff = new Date(expiresAt).getTime() - Date.now();
@@ -45,26 +44,12 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
     const id = setInterval(update, 60000);
     return () => clearInterval(id);
   }, [expiresAt]);
-
   const diff = new Date(expiresAt).getTime() - Date.now();
-  const isUrgent = diff > 0 && diff < 3600000; // less than 1 hour
-  const isWarning = diff > 0 && diff < 86400000; // less than 1 day
-
+  const isUrgent = diff > 0 && diff < 3600000;
+  const isWarning = diff > 0 && diff < 86400000;
   return (
-    <span style={{
-      fontSize: 9,
-      fontFamily: "IBM Plex Mono, monospace",
-      fontWeight: 700,
-      color: isUrgent ? "var(--danger)" : isWarning ? "var(--warning)" : "var(--ink-3)",
-      display: "flex",
-      alignItems: "center",
-      gap: 3,
-      marginTop: 3,
-    }}>
-      <svg viewBox="0 0 12 12" fill="none" width="9" height="9">
-        <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
-        <path d="M6 3.5v2.8l1.2.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-      </svg>
+    <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: isUrgent ? "var(--danger)" : isWarning ? "var(--warning)" : "var(--ink-3)", display: "flex", alignItems: "center", gap: 3, marginTop: 3 }}>
+      <svg viewBox="0 0 12 12" fill="none" width="9" height="9"><circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" /><path d="M6 3.5v2.8l1.2.8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" /></svg>
       {timeLeft}
     </span>
   );
@@ -90,7 +75,8 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
       const res = await fetch(`/api/links?address=${address}`);
       if (!res.ok) return;
       const data = await res.json();
-      setLinks(data.links ?? []);
+      // Only show non-escrow payment links on dashboard
+      setLinks((data.links ?? []).filter((l: any) => !l.isEscrow && !l.isRefunded));
     } catch (err) {
       console.error(err);
     } finally {
@@ -127,12 +113,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
     if (!completed.length) return;
     const rows = [
       ["Title", "Amount (USDC)", "Status", "Created", "Paid At", "TX Hash"],
-      ...completed.map((l) => [
-        l.title, l.amount, l.status,
-        formatDate(l.createdAt),
-        l.paidAt ? formatDate(l.paidAt) : "",
-        l.txHash ?? "",
-      ]),
+      ...completed.map((l) => [l.title, l.amount, l.status, formatDate(l.createdAt), l.paidAt ? formatDate(l.paidAt) : "", l.txHash ?? ""]),
     ];
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -155,7 +136,6 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
 
   return (
     <div className="table-card">
-      {/* Header */}
       <div className="table-header">
         <div className="table-header-left">
           <span className="table-header-title">Payment Links</span>
@@ -170,7 +150,6 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         </div>
       </div>
 
-      {/* Column headers */}
       {filtered.length > 0 && (
         <div className="table-col-headers">
           {["TITLE", "STATUS", "AMOUNT", "CREATED", "ACTIONS"].map((c) => (
@@ -179,22 +158,15 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         </div>
       )}
 
-      {/* Scrollable rows */}
       <div style={{ overflowY: "auto", maxHeight: 480, flex: 1 }}>
-
         {(!mounted || isLoading) && (
-          <div className="loading-center" style={{ height: 160 }}>
-            <div className="page-spinner" />
-          </div>
+          <div className="loading-center" style={{ height: 160 }}><div className="page-spinner" /></div>
         )}
 
         {mounted && !isConnected && !isLoading && (
           <div className="table-not-connected">
             <div className="table-not-connected-icon">
-              <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5" />
-                <path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="var(--ink-3)" strokeWidth="1.5" /><path d="M12 8v4m0 4h.01" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </div>
             <p className="table-not-connected-text">Wallet not connected</p>
             <p className="table-not-connected-sub">Connect your wallet to view payment links</p>
@@ -204,10 +176,7 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         {mounted && isConnected && !isLoading && filtered.length === 0 && (
           <div className="table-empty">
             <div className="table-empty-icon">
-              <svg viewBox="0 0 24 24" fill="none" width="22" height="22">
-                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" /><path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.1-1.1" stroke="var(--ink-3)" strokeWidth="1.5" strokeLinecap="round" /></svg>
             </div>
             <p className="table-empty-title">{filter === "ALL" ? "No payment links yet" : `No ${filter.toLowerCase()} links`}</p>
             <p className="table-empty-sub">{filter === "ALL" ? "Create your first payment link above" : "Try a different filter"}</p>
@@ -215,44 +184,30 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
         )}
 
         {mounted && isConnected && isLoading && (
-          <>
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="table-skeleton-row">
-                <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }} /><div className="skeleton" style={{ width: "40%", height: 10 }} /></div>
-                <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
-                <div className="skeleton" style={{ width: 70, height: 14 }} />
-                <div className="skeleton" style={{ width: 80, height: 12 }} />
-                <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /></div>
-              </div>
-            ))}
-          </>
+          <>{[1, 2, 3].map((i) => (
+            <div key={i} className="table-skeleton-row">
+              <div><div className="skeleton" style={{ width: "60%", height: 14, marginBottom: 6 }} /><div className="skeleton" style={{ width: "40%", height: 10 }} /></div>
+              <div className="skeleton" style={{ width: 80, height: 22, borderRadius: 20 }} />
+              <div className="skeleton" style={{ width: 70, height: 14 }} />
+              <div className="skeleton" style={{ width: 80, height: 12 }} />
+              <div style={{ display: "flex", gap: 6 }}><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /><div className="skeleton" style={{ width: 60, height: 28, borderRadius: 6 }} /></div>
+            </div>
+          ))}</>
         )}
 
         {mounted && !isLoading && filtered.map((link) => (
           <div key={link.id} className="table-row">
-            {/* Title */}
             <div className="table-cell-title">
               <div className="table-cell-title-name">
                 <span className="table-cell-status-dot" style={{ background: statusColor(link.status) }} />
                 <span className="table-cell-title-text">{link.title}</span>
                 {link.stealthAddress && <span className="stealth-badge">🔒 stealth</span>}
-                {(link as any).isEscrow && !(link as any).isRefunded && (
-                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "#5b8ff9", background: "rgba(91,143,249,.12)", border: "1px solid rgba(91,143,249,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em" }}>ESCROW</span>
-                )}
-                {(link as any).isRefunded && (
-                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", fontWeight: 700, color: "var(--danger)", background: "rgba(240,62,95,.1)", border: "1px solid rgba(240,62,95,.25)", borderRadius: 4, padding: "1px 5px", letterSpacing: ".06em" }}>REFUNDED</span>
-                )}
                 {link.expiresAt && link.status === "ACTIVE" && (
-                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: 4, padding: "1px 5px" }}>
-                    exp
-                  </span>
+                  <span style={{ fontSize: 9, fontFamily: "IBM Plex Mono, monospace", color: "var(--ink-3)", background: "var(--raised)", border: "1px solid var(--stroke)", borderRadius: 4, padding: "1px 5px" }}>exp</span>
                 )}
               </div>
               {link.description && <p className="table-cell-description">{link.description}</p>}
-              {/* Expiry countdown */}
-              {link.expiresAt && link.status === "ACTIVE" && (
-                <Countdown expiresAt={link.expiresAt} />
-              )}
+              {link.expiresAt && link.status === "ACTIVE" && <Countdown expiresAt={link.expiresAt} />}
               {link.txHash && (
                 <a href={`https://testnet.arcscan.app/tx/${link.txHash}`} target="_blank" rel="noopener noreferrer" className="table-cell-txhash">
                   {shortenAddr(link.txHash)} ↗
@@ -260,15 +215,12 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
               )}
             </div>
 
-            {/* Status */}
             <div>
               <span className={`status-badge ${statusClass(link.status)}`}>
                 <span className="status-badge-dot" />
                 {link.status}
               </span>
-              {link.status === "COMPLETED" && (
-                <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, fontFamily: "IBM Plex Mono, monospace" }}>Paid ✓</p>
-              )}
+              {link.status === "COMPLETED" && <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, fontFamily: "IBM Plex Mono, monospace" }}>Paid ✓</p>}
               {link.status === "EXPIRED" && link.expiresAt && (
                 <p style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, fontFamily: "IBM Plex Mono, monospace" }}>
                   {new Date(link.expiresAt).toLocaleDateString("en", { month: "short", day: "numeric" })}
@@ -276,15 +228,12 @@ export function PaymentLinksTable({ refreshTrigger }: Props) {
               )}
             </div>
 
-            {/* Amount */}
             <div>
               <span className="table-amount">{formatUSDC(link.amount)}<span className="table-amount-unit">USDC</span></span>
             </div>
 
-            {/* Date */}
             <span className="table-date">{formatDate(link.createdAt)}</span>
 
-            {/* Actions */}
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <button className={`table-copy-btn${copiedId === link.id ? " copied" : ""}`} onClick={() => copyLink(link.id)} disabled={link.status !== "ACTIVE"}>
                 {copiedId === link.id ? "Copied!" : "Copy Link"}
