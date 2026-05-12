@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { generateStealthWallet } from "@/lib/stealthWallet";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const address = searchParams.get("address");
   if (!address) return NextResponse.json({ error: "Address required." }, { status: 400 });
-
   const addr = address.toLowerCase();
 
-  // Payment links
   const paymentLinks = await db.paymentLink.findMany({
     where: { recipientAddress: addr },
     orderBy: { createdAt: "desc" },
   });
 
-  // Released escrows (seller received)
   const releasedEscrows = await db.escrowLink.findMany({
     where: { sellerAddress: addr, status: { in: ["RELEASED", "CONFIRMED"] } },
     orderBy: { createdAt: "desc" },
   });
 
-  // Cancelled/refunded escrows (buyer got refund — seller didn't receive)
   const refundedEscrows = await db.escrowLink.findMany({
     where: { sellerAddress: addr, status: "CANCELLED", txHash: { not: null } },
     orderBy: { createdAt: "desc" },
@@ -67,4 +64,41 @@ export async function GET(req: NextRequest) {
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return NextResponse.json({ links });
+}
+
+export async function POST(req: NextRequest) {
+  let body: any;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid body." }, { status: 400 });
+  }
+
+  const { title, amount, description, recipientAddress, stealthMode, expiresAt } = body;
+  if (!title?.trim()) return NextResponse.json({ error: "Title is required." }, { status: 400 });
+  if (!recipientAddress) return NextResponse.json({ error: "Recipient address is required." }, { status: 400 });
+  const parsed = parseFloat(amount);
+  if (isNaN(parsed) || parsed <= 0) return NextResponse.json({ error: "Enter a valid amount greater than 0." }, { status: 400 });
+
+  let stealthAddress: string | null = null;
+  let stealthPrivateKey: string | null = null;
+
+  if (stealthMode) {
+    const wallet = generateStealthWallet();
+    stealthAddress = wallet.address;
+    stealthPrivateKey = wallet.encryptedPrivateKey;
+  }
+
+  const link = await db.paymentLink.create({
+    data: {
+      title: title.trim(),
+      amount: parsed.toString(),
+      description: description?.trim() || null,
+      recipientAddress: recipientAddress.toLowerCase(),
+      stealthAddress,
+      stealthPrivateKey,
+      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      status: "ACTIVE",
+    },
+  });
+
+  return NextResponse.json({ link }, { status: 201 });
 }
