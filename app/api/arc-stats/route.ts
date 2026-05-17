@@ -107,35 +107,33 @@ function buildHumanPayPage() {
   <p class="powered">Powered by <a href="https://conduit-pay.vercel.app">Conduit</a> · Built on Arc Network · Circle USDC</p>
 
   <script>
-    let walletClient = null;
+  async function connectAndPay() {
+    const btn = document.getElementById('payBtn');
+    const status = document.getElementById('status');
 
-    async function connectAndPay() {
-      const btn = document.getElementById('payBtn');
-      const status = document.getElementById('status');
+    if (!window.ethereum) {
+      status.textContent = 'MetaMask not found. Install MetaMask to pay.';
+      status.className = 'status error';
+      return;
+    }
 
-      if (!window.ethereum) {
-        status.textContent = 'MetaMask not found. Install MetaMask to pay.';
-        status.className = 'status error';
-        return;
-      }
+    try {
+      btn.disabled = true;
+      status.textContent = 'Connecting wallet...';
+      status.className = 'status';
 
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const account = accounts[0];
+
+      status.textContent = 'Switching to Arc Testnet...';
       try {
-        btn.disabled = true;
-        status.textContent = 'Connecting wallet...';
-        status.className = 'status';
-
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const account = accounts[0];
-
-        // Switch to Arc Testnet
-        status.textContent = 'Switching to Arc Testnet...';
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x4CE692' }], // 5042002 in hex
-          });
-        } catch (e) {
-          if (e.code === 4902) {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x4CE692' }],
+        });
+      } catch (e) {
+        if (e.code === 4902) {
+          try {
             await window.ethereum.request({
               method: 'wallet_addEthereumChain',
               params: [{
@@ -146,95 +144,84 @@ function buildHumanPayPage() {
                 blockExplorerUrls: ['https://testnet.arcscan.app'],
               }]
             });
+          } catch (addErr) {
+            if (!addErr.message?.includes('same RPC')) throw addErr;
           }
         }
+      }
 
-        status.textContent = 'Building payment authorization...';
+      status.textContent = 'Building payment authorization...';
 
-        // Build EIP-3009 transferWithAuthorization
-        const USDC = '0x3600000000000000000000000000000000000000';
-        const to = '${PAYMENT_ADDRESS}';
-        const value = BigInt(1000); // 0.001 USDC
-        const validAfter = BigInt(0);
-        const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
-        const nonce = '0x' + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
+      const USDC = '0x3600000000000000000000000000000000000000';
+      const to = '${PAYMENT_ADDRESS}';
+      const value = BigInt(1000);
+      const validAfter = BigInt(0);
+      const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
+      const nonce = '0x' + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
 
-        // Get chain ID for domain
-        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-        const chainId = parseInt(chainIdHex, 16);
+      const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+      const chainId = parseInt(chainIdHex, 16);
 
-        const domain = {
-          name: 'USD Coin',
-          version: '2',
-          chainId,
-          verifyingContract: USDC,
-        };
+      const domain = { name: 'USD Coin', version: '2', chainId, verifyingContract: USDC };
+      const types = {
+        TransferWithAuthorization: [
+          { name: 'from', type: 'address' },
+          { name: 'to', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'validAfter', type: 'uint256' },
+          { name: 'validBefore', type: 'uint256' },
+          { name: 'nonce', type: 'bytes32' },
+        ]
+      };
+      const message = {
+        from: account, to,
+        value: value.toString(),
+        validAfter: validAfter.toString(),
+        validBefore: validBefore.toString(),
+        nonce,
+      };
 
-        const types = {
-          TransferWithAuthorization: [
-            { name: 'from', type: 'address' },
-            { name: 'to', type: 'address' },
-            { name: 'value', type: 'uint256' },
-            { name: 'validAfter', type: 'uint256' },
-            { name: 'validBefore', type: 'uint256' },
-            { name: 'nonce', type: 'bytes32' },
-          ]
-        };
+      status.textContent = 'Sign in MetaMask to authorize payment...';
 
-        const message = {
-          from: account,
-          to,
-          value: value.toString(),
-          validAfter: validAfter.toString(),
-          validBefore: validBefore.toString(),
-          nonce,
-        };
+      const signature = await window.ethereum.request({
+        method: 'eth_signTypedData_v4',
+        params: [account, JSON.stringify({ domain, types, primaryType: 'TransferWithAuthorization', message })],
+      });
 
-        status.textContent = 'Sign in MetaMask to authorize payment...';
+      const sig = signature.slice(2);
+      const r = '0x' + sig.slice(0, 64);
+      const s = '0x' + sig.slice(64, 128);
+      const v = parseInt(sig.slice(128, 130), 16);
 
-        const signature = await window.ethereum.request({
-          method: 'eth_signTypedData_v4',
-          params: [account, JSON.stringify({ domain, types, primaryType: 'TransferWithAuthorization', message })],
-        });
+      const paymentPayload = JSON.stringify({ from: account, to, value: value.toString(), validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce, v, r, s });
+      const encoded = btoa(paymentPayload);
 
-        const sig = signature.slice(2);
-        const r = '0x' + sig.slice(0, 64);
-        const s = '0x' + sig.slice(64, 128);
-        const v = parseInt(sig.slice(128, 130), 16);
+      status.textContent = 'Verifying payment...';
 
-        const paymentPayload = JSON.stringify({ from: account, to, value: value.toString(), validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce, v, r, s });
-        const encoded = btoa(paymentPayload);
+      const res = await fetch('/api/arc-stats', {
+        headers: { 'PAYMENT-SIGNATURE': encoded }
+      });
 
-        status.textContent = 'Verifying payment...';
-
-        const res = await fetch('/api/arc-stats', {
-          headers: { 'PAYMENT-SIGNATURE': encoded }
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          status.textContent = '✓ Payment verified! Here is your data:';
-          status.className = 'status success';
-          const resultEl = document.getElementById('result');
-          resultEl.style.display = 'block';
-          resultEl.textContent = JSON.stringify(data, null, 2);
-          btn.textContent = '✓ Paid & Accessed';
-        } else {
-          status.textContent = 'Payment verification failed. Try again.';
-          status.className = 'status error';
-          btn.disabled = false;
-        }
-      } catch (err) {
-        if (err.code === 4001) {
-          status.textContent = 'Payment rejected.';
-        } else {
-          status.textContent = 'Error: ' + (err.message ?? 'Something went wrong');
-        }
+      if (res.ok) {
+        const data = await res.json();
+        status.textContent = '✓ Payment verified! Here is your data:';
+        status.className = 'status success';
+        const resultEl = document.getElementById('result');
+        resultEl.style.display = 'block';
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        btn.textContent = '✓ Paid & Accessed';
+      } else {
+        status.textContent = 'Payment verification failed. Try again.';
         status.className = 'status error';
         btn.disabled = false;
       }
+    } catch (err) {
+      status.textContent = err.code === 4001 ? 'Payment rejected.' : 'Error: ' + (err.message ?? 'Something went wrong');
+      status.className = 'status error';
+      btn.disabled = false;
     }
-  </script>
+  }
+</script>
 </body>
 </html>`;
 
