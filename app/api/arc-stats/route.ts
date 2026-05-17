@@ -1,5 +1,3 @@
-// FILE: conduit/app/api/arc-stats/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
