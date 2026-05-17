@@ -26,8 +26,12 @@ const LINKS = [
     icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M2 5h12M2 5l3-3M2 5l3 3M14 11H2m12 0l-3-3m3 3l-3 3" strokeLinecap="round" strokeLinejoin="round" /></svg>,
   },
   {
-    label: "Analytics", href: "/analytics", soon: true,
+    label: "Analytics", href: "/analytics",
     icon: <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><path d="M2 12V8h2.5v4H2zm4 0V4h2.5v8H6zm4 0V1h2.5v11H10z" opacity=".85" /></svg>,
+  },
+  {
+    label: "Developers", href: "/developers",
+    icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M5 4l-3 4 3 4M11 4l3 4-3 4M9 2l-2 12" strokeLinecap="round" strokeLinejoin="round" /></svg>,
   },
 ];
 

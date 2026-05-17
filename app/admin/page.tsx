@@ -285,6 +285,7 @@ export default function AdminPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "IBM Plex Mono, monospace" }}>{address?.slice(0, 6)}...{address?.slice(-4)}</span>
           <Link href="/" style={{ fontSize: 12, color: "var(--ink-3)", textDecoration: "none", padding: "6px 14px", border: "1px solid var(--stroke)", borderRadius: "var(--r-sm)", fontWeight: 600 }}>← App</Link>
+          <Link href="/admin/x402" style={{ fontSize: 12, color: "#a78bfa", background: "rgba(167,139,250,.1)", border: "1px solid rgba(167,139,250,.25)", borderRadius: "var(--r-sm)", padding: "6px 14px", fontWeight: 700, textDecoration: "none" }}>x402 Payments ↗</Link>
           <button onClick={fetchAll} style={{ fontSize: 12, color: "var(--c)", background: "var(--c-dim)", border: "1px solid var(--c-border)", borderRadius: "var(--r-sm)", padding: "6px 14px", cursor: "pointer", fontWeight: 700, fontFamily: "Sora, sans-serif" }}>Refresh</button>
         </div>
       </div>
