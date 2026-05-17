@@ -87,7 +87,10 @@ export default function HomePage() {
                       Get Started — It's Free
                     </button>
                     <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="btn-hero-ghost">
-                      Get Testnet USDC →
+                      Get Testnet USDC ↗
+                    </a>
+                    <a href="/developers" className="btn-hero-ghost">
+                      For Developers ↗
                     </a>
                   </div>
 
