@@ -3,8 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { usePrivy } from "@privy-io/react-auth";
+import { useSetActiveWallet } from "@privy-io/wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 import { useEffect, useState } from "react";
 
 const LINKS = [
@@ -25,7 +26,7 @@ const LINKS = [
     icon: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" width="13" height="13"><path d="M2 5h12M2 5l3-3M2 5l3 3M14 11H2m12 0l-3-3m3 3l-3 3" strokeLinecap="round" strokeLinejoin="round" /></svg>,
   },
   {
-    label: "Analytics", href: "/analytics",
+    label: "Analytics", href: "/analytics", soon: true,
     icon: <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13"><path d="M2 12V8h2.5v4H2zm4 0V4h2.5v8H6zm4 0V1h2.5v11H10z" opacity=".85" /></svg>,
   },
 ];
@@ -36,8 +37,9 @@ export function NavBar() {
   const [time, setTime] = useState("");
   const [isDark, setIsDark] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+
+  const { ready, authenticated, login, logout, user } = usePrivy();
+  const { address } = useAccount();
   const { disconnect } = useDisconnect();
 
   useEffect(() => {
@@ -63,17 +65,23 @@ export function NavBar() {
     }
   };
 
+  const handleLogout = async () => {
+    disconnect();
+    await logout();
+  };
+
   const short = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
   const logoSrc = mounted && !isDark ? "/conduit-logo-black.png" : "/conduit-logo-white.png";
+  const isConnected = ready && authenticated;
 
   return (
     <>
       <nav className="nav">
         <Link href="/" className="nav-logo">
           {mounted ? (
-            <Image src={logoSrc} alt="Conduit" width={140} height={52} style={{ height: 58, width: "auto", objectFit: "contain" }} priority />
+            <Image src={logoSrc} alt="Conduit" width={140} height={52} style={{ height: 100, width: "auto", objectFit: "contain" }} priority />
           ) : (
-            <Image src="/conduit-logo-white.png" alt="Conduit" width={140} height={52} style={{ height: 58, width: "auto", objectFit: "contain" }} priority />
+            <Image src="/conduit-logo-white.png" alt="Conduit" width={140} height={52} style={{ height: 100, width: "auto", objectFit: "contain" }} priority />
           )}
         </Link>
 
@@ -100,15 +108,15 @@ export function NavBar() {
 
           {mounted && <span className="nav-time">{time}</span>}
 
-          {mounted && (
+          {mounted && ready && (
             <>
               {isConnected ? (
-                <div className="nav-wallet" onClick={() => disconnect()} title="Click to disconnect">
+                <div className="nav-wallet" onClick={handleLogout} title="Click to disconnect">
                   <span className="nav-wallet-dot" />
-                  {short}
+                  {short || user?.email?.address?.slice(0, 16) || "Connected"}
                 </div>
               ) : (
-                <button className="nav-connect-btn" onClick={() => connect({ connector: injected() })}>
+                <button className="nav-connect-btn" onClick={login}>
                   Connect Wallet
                 </button>
               )}

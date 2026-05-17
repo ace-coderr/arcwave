@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Web3Provider } from "@/providers/Web3Provider";
+import { Providers } from "./providers";
 import { Analytics } from "@vercel/analytics/react";
 // @ts-ignore
 import "./globals.css";
@@ -57,7 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <Web3Provider>{children}</Web3Provider>
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>
