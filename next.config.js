@@ -5,10 +5,10 @@ const nextConfig = {
       "pino-pretty",
       "lokijs",
       "encoding",
-      "@react-native-async-storage/async-storage"
+      "@react-native-async-storage/async-storage",
+      "@farcaster/mini-app-solana"
     );
     return config;
   },
 };
-
 module.exports = nextConfig;
