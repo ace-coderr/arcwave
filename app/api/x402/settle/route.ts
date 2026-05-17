@@ -1,7 +1,10 @@
+// FILE: conduit/app/api/x402/settle/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, createWalletClient, http, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
+import { db } from "@/lib/db";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 const FACILITATOR_PRIVATE_KEY = process.env.FORWARDER_PRIVATE_KEY as `0x${string}`;
@@ -41,10 +44,8 @@ const EIP3009_ABI = [
     },
 ] as const;
 
-// In-memory settlement cache to prevent duplicate settlements
+// In-memory settlement cache
 const settlementCache = new Map<string, { settled: boolean; txHash?: string; timestamp: number }>();
-
-// Clean expired cache entries every 5 minutes
 setInterval(() => {
     const now = Date.now();
     for (const [key, val] of settlementCache.entries()) {
@@ -61,7 +62,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: "Missing payload or paymentDetails" }, { status: 400 });
         }
 
-        // Decode payment payload
         let paymentData: any;
         try {
             paymentData = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
@@ -75,12 +75,7 @@ export async function POST(req: NextRequest) {
         const cacheKey = `${from}-${nonce}`;
         const cached = settlementCache.get(cacheKey);
         if (cached?.settled) {
-            return NextResponse.json({
-                success: true,
-                txHash: cached.txHash,
-                duplicate: true,
-                message: "Payment already settled",
-            });
+            return NextResponse.json({ success: true, txHash: cached.txHash, duplicate: true });
         }
 
         // Check nonce not already used on-chain
@@ -96,10 +91,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: "Nonce already used on-chain" }, { status: 400 });
         }
 
-        // Mark as in-progress
         settlementCache.set(cacheKey, { settled: false, timestamp: Date.now() });
 
-        // Submit transferWithAuthorization on-chain
         const account = privateKeyToAccount(FACILITATOR_PRIVATE_KEY);
         const walletClient = createWalletClient({
             account,
@@ -124,7 +117,6 @@ export async function POST(req: NextRequest) {
             ],
         });
 
-        // Wait for confirmation
         const receipt = await arcPublicClient.waitForTransactionReceipt({
             hash: txHash,
             confirmations: 1,
@@ -135,8 +127,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: "Transaction reverted on-chain" }, { status: 500 });
         }
 
-        // Cache successful settlement
         settlementCache.set(cacheKey, { settled: true, txHash, timestamp: Date.now() });
+
+        // Save to DB for dashboard tracking
+        try {
+            await (db as any).x402Payment.create({
+                data: {
+                    txHash,
+                    payer: from.toLowerCase(),
+                    payTo: to.toLowerCase(),
+                    amount: (parseInt(value) / 1_000_000).toFixed(6),
+                    network: `eip155:${arcTestnet.id}`,
+                    resource: paymentDetails.resource ?? "unknown",
+                    nonce: nonce as string,
+                    settledAt: new Date(),
+                },
+            });
+        } catch { }
 
         return NextResponse.json({
             success: true,

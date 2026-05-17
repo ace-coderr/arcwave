@@ -64,3 +64,16 @@ model EscrowMessage {
   message       String
   createdAt     DateTime   @default(now())
 }
+
+model X402Payment {
+  id        String   @id @default(cuid())
+  txHash    String   @unique
+  payer     String
+  payTo     String
+  amount    String
+  network   String
+  resource  String
+  nonce     String
+  settledAt DateTime @default(now())
+  createdAt DateTime @default(now())
+}
