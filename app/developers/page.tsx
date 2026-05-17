@@ -13,7 +13,7 @@ export default function DevelopersPage() {
             {/* Top bar */}
             <div style={{ height: 56, background: "var(--surface)", borderBottom: "1px solid var(--stroke)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 40px" }}>
                 <Link href="/" style={{ textDecoration: "none" }}>
-                    <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 32, width: "auto" }} />
+                    <img src="/conduit-logo-white.png" alt="Conduit" style={{ height: 52, width: "auto" }} />
                 </Link>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                     <a href="https://github.com/ace-coderr/conduit" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--ink-3)", textDecoration: "none", fontWeight: 600 }}>GitHub ↗</a>
