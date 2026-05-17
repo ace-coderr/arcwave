@@ -5,9 +5,12 @@ const nextConfig = {
       "pino-pretty",
       "lokijs",
       "encoding",
-      "@react-native-async-storage/async-storage",
-      "@farcaster/mini-app-solana"
+      "@react-native-async-storage/async-storage"
     );
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@farcaster/mini-app-solana": false,
+    };
     return config;
   },
 };
