@@ -11,36 +11,36 @@ const FACILITATOR = "https://conduit-pay.vercel.app/api/x402";
 const USDC = "0x3600000000000000000000000000000000000000";
 
 const paymentDetails = {
-    scheme: "exact",
-    network: NETWORK,
-    maxAmountRequired: PRICE,
-    resource: "https://conduit-pay.vercel.app/api/arc-stats",
-    description: "Live Arc Network and Conduit platform stats",
-    mimeType: "application/json",
-    payTo: PAYMENT_ADDRESS,
-    maxTimeoutSeconds: 300,
-    asset: USDC,
-    extra: { name: "USD Coin", version: "2" },
+  scheme: "exact",
+  network: NETWORK,
+  maxAmountRequired: PRICE,
+  resource: "https://conduit-pay.vercel.app/api/arc-stats",
+  description: "Live Arc Network and Conduit platform stats",
+  mimeType: "application/json",
+  payTo: PAYMENT_ADDRESS,
+  maxTimeoutSeconds: 300,
+  asset: USDC,
+  extra: { name: "USD Coin", version: "2" },
 };
 
 function buildPaymentRequired() {
-    const encoded = Buffer.from(JSON.stringify({ accepts: [paymentDetails] })).toString("base64");
-    return new NextResponse(
-        JSON.stringify({ error: "Payment Required", accepts: [paymentDetails] }),
-        {
-            status: 402,
-            headers: {
-                "Content-Type": "application/json",
-                "PAYMENT-REQUIRED": encoded,
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
-            },
-        }
-    );
+  const encoded = Buffer.from(JSON.stringify({ accepts: [paymentDetails] })).toString("base64");
+  return new NextResponse(
+    JSON.stringify({ error: "Payment Required", accepts: [paymentDetails] }),
+    {
+      status: 402,
+      headers: {
+        "Content-Type": "application/json",
+        "PAYMENT-REQUIRED": encoded,
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
+      },
+    }
+  );
 }
 
 function buildHumanPayPage() {
-    const html = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
@@ -141,7 +141,7 @@ function buildHumanPayPage() {
               params: [{
                 chainId: '0x4CE692',
                 chainName: 'Arc Testnet',
-                nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 6 },
+                nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 18 },
                 rpcUrls: ['https://rpc.testnet.arc.network'],
                 blockExplorerUrls: ['https://testnet.arcscan.app'],
               }]
@@ -238,131 +238,131 @@ function buildHumanPayPage() {
 </body>
 </html>`;
 
-    return new NextResponse(html, {
-        status: 402,
-        headers: {
-            "Content-Type": "text/html",
-            "PAYMENT-REQUIRED": Buffer.from(JSON.stringify({ accepts: [paymentDetails] })).toString("base64"),
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
-        },
-    });
+  return new NextResponse(html, {
+    status: 402,
+    headers: {
+      "Content-Type": "text/html",
+      "PAYMENT-REQUIRED": Buffer.from(JSON.stringify({ accepts: [paymentDetails] })).toString("base64"),
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
+    },
+  });
 }
 
 async function verifyPayment(paymentHeader: string): Promise<{ valid: boolean; error?: string }> {
-    try {
-        const res = await fetch(`${FACILITATOR}/verify`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                payload: paymentHeader,
-                paymentDetails: {
-                    scheme: "exact",
-                    network: NETWORK,
-                    maxAmountRequired: PRICE,
-                    payTo: PAYMENT_ADDRESS,
-                    asset: USDC,
-                },
-            }),
-        });
-        const data = await res.json();
-        return { valid: data.isValid === true };
-    } catch (err: any) {
-        return { valid: false, error: err.message };
-    }
+  try {
+    const res = await fetch(`${FACILITATOR}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        payload: paymentHeader,
+        paymentDetails: {
+          scheme: "exact",
+          network: NETWORK,
+          maxAmountRequired: PRICE,
+          payTo: PAYMENT_ADDRESS,
+          asset: USDC,
+        },
+      }),
+    });
+    const data = await res.json();
+    return { valid: data.isValid === true };
+  } catch (err: any) {
+    return { valid: false, error: err.message };
+  }
 }
 
 async function settlePayment(paymentHeader: string): Promise<void> {
-    try {
-        await fetch(`${FACILITATOR}/settle`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                payload: paymentHeader,
-                paymentDetails: {
-                    scheme: "exact",
-                    network: NETWORK,
-                    maxAmountRequired: PRICE,
-                    payTo: PAYMENT_ADDRESS,
-                    asset: USDC,
-                },
-            }),
-        });
-    } catch { }
+  try {
+    await fetch(`${FACILITATOR}/settle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        payload: paymentHeader,
+        paymentDetails: {
+          scheme: "exact",
+          network: NETWORK,
+          maxAmountRequired: PRICE,
+          payTo: PAYMENT_ADDRESS,
+          asset: USDC,
+        },
+      }),
+    });
+  } catch { }
 }
 
 export async function GET(req: NextRequest) {
-    const paymentSignature = req.headers.get("PAYMENT-SIGNATURE") || req.headers.get("payment-signature");
-    const acceptHeader = req.headers.get("accept") ?? "";
-    const isHuman = acceptHeader.includes("text/html");
+  const paymentSignature = req.headers.get("PAYMENT-SIGNATURE") || req.headers.get("payment-signature");
+  const acceptHeader = req.headers.get("accept") ?? "";
+  const isHuman = acceptHeader.includes("text/html");
 
-    // No payment — show human pay page or machine 402
-    if (!paymentSignature) {
-        return isHuman ? buildHumanPayPage() : buildPaymentRequired();
-    }
+  // No payment — show human pay page or machine 402
+  if (!paymentSignature) {
+    return isHuman ? buildHumanPayPage() : buildPaymentRequired();
+  }
 
-    // Verify payment
-    const { valid } = await verifyPayment(paymentSignature);
-    if (!valid) {
-        return isHuman ? buildHumanPayPage() : buildPaymentRequired();
-    }
+  // Verify payment
+  const { valid } = await verifyPayment(paymentSignature);
+  if (!valid) {
+    return isHuman ? buildHumanPayPage() : buildPaymentRequired();
+  }
 
-    // Fetch stats
-    const [blockNumber, links, escrows] = await Promise.all([
-        arcPublicClient.getBlockNumber(),
-        db.paymentLink.findMany({ select: { amount: true, status: true } }),
-        db.escrowLink.findMany({ select: { amount: true, status: true } }),
-    ]);
+  // Fetch stats
+  const [blockNumber, links, escrows] = await Promise.all([
+    arcPublicClient.getBlockNumber(),
+    db.paymentLink.findMany({ select: { amount: true, status: true } }),
+    db.escrowLink.findMany({ select: { amount: true, status: true } }),
+  ]);
 
-    const completedLinks = links.filter(l => l.status === "COMPLETED" || l.status === "PAID");
-    const releasedEscrows = escrows.filter(e => ["RELEASED", "CONFIRMED"].includes(e.status));
-    const totalLinkVolume = completedLinks.reduce((s, l) => s + parseFloat(l.amount), 0);
-    const totalEscrowVolume = releasedEscrows.reduce((s, e) => s + parseFloat(e.amount), 0);
+  const completedLinks = links.filter(l => l.status === "COMPLETED" || l.status === "PAID");
+  const releasedEscrows = escrows.filter(e => ["RELEASED", "CONFIRMED"].includes(e.status));
+  const totalLinkVolume = completedLinks.reduce((s, l) => s + parseFloat(l.amount), 0);
+  const totalEscrowVolume = releasedEscrows.reduce((s, e) => s + parseFloat(e.amount), 0);
 
-    const responseData = {
-        network: {
-            name: "Arc Testnet",
-            chainId: 5042002,
-            blockNumber: blockNumber.toString(),
-            rpc: "https://rpc.testnet.arc.network",
-            explorer: "https://testnet.arcscan.app",
-        },
-        conduit: {
-            paymentLinks: {
-                total: links.length,
-                completed: completedLinks.length,
-                volume: `${totalLinkVolume.toFixed(2)} USDC`,
-            },
-            escrows: {
-                total: escrows.length,
-                released: releasedEscrows.length,
-                active: escrows.filter(e => e.status === "HOLDING").length,
-                disputed: escrows.filter(e => ["DISPUTED", "MEDIATION"].includes(e.status)).length,
-                volume: `${totalEscrowVolume.toFixed(2)} USDC`,
-            },
-            totalVolume: `${(totalLinkVolume + totalEscrowVolume).toFixed(2)} USDC`,
-        },
-        facilitator: FACILITATOR,
-        timestamp: new Date().toISOString(),
-    };
+  const responseData = {
+    network: {
+      name: "Arc Testnet",
+      chainId: 5042002,
+      blockNumber: blockNumber.toString(),
+      rpc: "https://rpc.testnet.arc.network",
+      explorer: "https://testnet.arcscan.app",
+    },
+    conduit: {
+      paymentLinks: {
+        total: links.length,
+        completed: completedLinks.length,
+        volume: `${totalLinkVolume.toFixed(2)} USDC`,
+      },
+      escrows: {
+        total: escrows.length,
+        released: releasedEscrows.length,
+        active: escrows.filter(e => e.status === "HOLDING").length,
+        disputed: escrows.filter(e => ["DISPUTED", "MEDIATION"].includes(e.status)).length,
+        volume: `${totalEscrowVolume.toFixed(2)} USDC`,
+      },
+      totalVolume: `${(totalLinkVolume + totalEscrowVolume).toFixed(2)} USDC`,
+    },
+    facilitator: FACILITATOR,
+    timestamp: new Date().toISOString(),
+  };
 
-    settlePayment(paymentSignature);
+  settlePayment(paymentSignature);
 
-    return NextResponse.json(responseData, {
-        headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
-        },
-    });
+  return NextResponse.json(responseData, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
+    },
+  });
 }
 
 export async function OPTIONS() {
-    return new NextResponse(null, {
-        headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, PAYMENT-SIGNATURE",
-            "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
-        },
-    });
+  return new NextResponse(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, PAYMENT-SIGNATURE",
+      "Access-Control-Expose-Headers": "PAYMENT-REQUIRED, PAYMENT-RESPONSE",
+    },
+  });
 }
