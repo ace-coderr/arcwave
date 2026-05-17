@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useConnect } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { useAccount } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
 import { NavBar } from "@/components/NavBar";
 import { StatsRow } from "@/components/StatsRow";
 import { CreateLinkForm } from "@/components/CreateLinkForm";
@@ -12,8 +12,8 @@ export default function HomePage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [mounted, setMounted] = useState(false);
   const [stats, setStats] = useState({ totalLinks: 0, completedLinks: 0, totalEarned: "0" });
-  const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { address } = useAccount();
+  const { login, authenticated } = usePrivy();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -30,8 +30,8 @@ export default function HomePage() {
   }, [address]);
 
   useEffect(() => {
-    if (isConnected && address) fetchStats();
-  }, [isConnected, address, fetchStats, refreshTrigger]);
+    if (authenticated && address) fetchStats();
+  }, [authenticated, address, fetchStats, refreshTrigger]);
 
   const TRUST_ITEMS = [
     {
@@ -60,7 +60,7 @@ export default function HomePage() {
         {!mounted && <div className="loading-wrap"><div className="page-spinner" /></div>}
 
         {/* Landing */}
-        {mounted && !isConnected && (
+        {mounted && !authenticated && (
           <>
             <div className="landing fade-in">
               <div className="landing-inner">
@@ -83,7 +83,7 @@ export default function HomePage() {
                   </p>
 
                   <div className="hero-cta">
-                    <button className="btn-hero" onClick={() => connect({ connector: injected() })}>
+                    <button className="btn-hero" onClick={login}>
                       Get Started — It's Free
                     </button>
                     <a href="https://faucet.circle.com" target="_blank" rel="noopener noreferrer" className="btn-hero-ghost">
@@ -178,7 +178,7 @@ export default function HomePage() {
         )}
 
         {/* Dashboard */}
-        {mounted && isConnected && (
+        {mounted && authenticated && (
           <div className="page-wrap fade-in">
             <div className="page-header">
               <h1 className="page-title">Dashboard</h1>
