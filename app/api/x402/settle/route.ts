@@ -1,5 +1,3 @@
-// FILE: conduit/app/api/x402/settle/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, createWalletClient, http, getAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -155,7 +153,9 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (err: any) {
-        console.error("[x402/settle] Error:", err);
-        return NextResponse.json({ success: false, error: err.message ?? "Settlement failed" }, { status: 500 });
+        console.error("[x402/settle] Full error:", JSON.stringify(err, null, 2));
+        console.error("[x402/settle] Message:", err.message);
+        console.error("[x402/settle] Cause:", err.cause);
+        return NextResponse.json({ success: false, error: err.message ?? "Settlement failed", details: err.cause?.toString() }, { status: 500 });
     }
 }
