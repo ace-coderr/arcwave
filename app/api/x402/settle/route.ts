@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, recoverTypedDataAddress } from "viem";
+import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
@@ -43,25 +43,21 @@ const EIP3009_ABI = [
         outputs: [{ name: "", type: "bool" }],
         stateMutability: "view",
     },
+    {
+        name: "TRANSFER_WITH_AUTHORIZATION_TYPEHASH",
+        type: "function",
+        inputs: [],
+        outputs: [{ name: "", type: "bytes32" }],
+        stateMutability: "view",
+    },
+    {
+        name: "DOMAIN_SEPARATOR",
+        type: "function",
+        inputs: [],
+        outputs: [{ name: "", type: "bytes32" }],
+        stateMutability: "view",
+    },
 ] as const;
-
-const EIP712_DOMAIN = {
-    name: "USDC",
-    version: "2",
-    chainId: arcTestnet.id,
-    verifyingContract: USDC_ADDRESS as `0x${string}`,
-} as const;
-
-const EIP712_TYPES = {
-    TransferWithAuthorization: [
-        { name: "from", type: "address" },
-        { name: "to", type: "address" },
-        { name: "value", type: "uint256" },
-        { name: "validAfter", type: "uint256" },
-        { name: "validBefore", type: "uint256" },
-        { name: "nonce", type: "bytes32" },
-    ],
-} as const;
 
 // In-memory settlement cache
 const settlementCache = new Map<string, { settled: boolean; txHash?: string; timestamp: number }>();
@@ -92,33 +88,50 @@ export async function POST(req: NextRequest) {
 
         console.log("[x402/settle] Decoded:", safeStringify({ from, to, value, validAfter, validBefore, nonce, v }));
 
-        // Build full 65-byte sig: r(32) + s(32) + v(1)
-        const vHex = Number(v).toString(16).padStart(2, "0");
-        const fullSig = `${r}${s.slice(2)}${vHex}` as `0x${string}`;
-
-        const typedDataMessage = {
-            from: from as `0x${string}`,
-            to: to as `0x${string}`,
-            value: BigInt(value),
-            validAfter: BigInt(validAfter),
-            validBefore: BigInt(validBefore),
-            nonce: nonce as `0x${string}`,
-        };
-
-        // Recover address from signature to diagnose the issue
+        // Read on-chain type hash and domain separator for diagnosis
         try {
-            const recovered = await recoverTypedDataAddress({
-                domain: EIP712_DOMAIN,
-                types: EIP712_TYPES,
-                primaryType: "TransferWithAuthorization",
-                message: typedDataMessage,
-                signature: fullSig,
-            });
-            console.log("[x402/settle] Expected from:", from.toLowerCase());
-            console.log("[x402/settle] Recovered addr:", recovered.toLowerCase());
-            console.log("[x402/settle] Sig match:", recovered.toLowerCase() === from.toLowerCase());
-        } catch (recoverErr: any) {
-            console.error("[x402/settle] Recover error:", recoverErr.message);
+            const [typeHash, domainSep] = await Promise.all([
+                arcPublicClient.readContract({
+                    address: USDC_ADDRESS as `0x${string}`,
+                    abi: EIP3009_ABI,
+                    functionName: "TRANSFER_WITH_AUTHORIZATION_TYPEHASH",
+                }),
+                arcPublicClient.readContract({
+                    address: USDC_ADDRESS as `0x${string}`,
+                    abi: EIP3009_ABI,
+                    functionName: "DOMAIN_SEPARATOR",
+                }),
+            ]);
+            console.log("[x402/settle] Contract TYPEHASH:", typeHash);
+            console.log("[x402/settle] Contract DOMAIN_SEP:", domainSep);
+
+            // Expected typehash for standard TransferWithAuthorization
+            const expectedTypeHash = keccak256(
+                new TextEncoder().encode(
+                    "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+                )
+            );
+            console.log("[x402/settle] Expected TYPEHASH:", expectedTypeHash);
+            console.log("[x402/settle] TYPEHASH match:", typeHash === expectedTypeHash);
+
+            // Compute the struct hash
+            const structHash = keccak256(encodeAbiParameters(
+                parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
+                [typeHash, from as `0x${string}`, to as `0x${string}`, BigInt(value), BigInt(validAfter), BigInt(validBefore), nonce as `0x${string}`]
+            ));
+            console.log("[x402/settle] Struct hash:", structHash);
+
+            // Compute the digest
+            const digest = keccak256(
+                Buffer.concat([
+                    Buffer.from("1901", "hex"),
+                    Buffer.from(domainSep.slice(2), "hex"),
+                    Buffer.from(structHash.slice(2), "hex"),
+                ])
+            );
+            console.log("[x402/settle] Digest:", digest);
+        } catch (diagErr: any) {
+            console.error("[x402/settle] Diag error:", diagErr.message);
         }
 
         // Duplicate settlement protection
