@@ -162,7 +162,7 @@ function buildHumanPayPage() {
       const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
       const chainId = parseInt(chainIdHex, 16);
 
-      const domain = { name: 'USD Coin', version: '2', chainId, verifyingContract: USDC };
+      const domain = { name: 'USDC', version: '2', chainId, verifyingContract: USDC };
       const types = {
         TransferWithAuthorization: [
           { name: 'from', type: 'address' },
