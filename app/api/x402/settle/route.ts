@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http } from "viem";
+import { createPublicClient, createWalletClient, http, verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
@@ -7,7 +7,6 @@ import { db } from "@/lib/db";
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 const FACILITATOR_PRIVATE_KEY = process.env.FORWARDER_PRIVATE_KEY as `0x${string}`;
 
-// BigInt-safe JSON serializer
 const safeStringify = (obj: any) =>
     JSON.stringify(obj, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 
@@ -46,6 +45,24 @@ const EIP3009_ABI = [
     },
 ] as const;
 
+const EIP712_DOMAIN = {
+    name: "USDC",
+    version: "2",
+    chainId: arcTestnet.id,
+    verifyingContract: USDC_ADDRESS as `0x${string}`,
+} as const;
+
+const EIP712_TYPES = {
+    TransferWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+    ],
+} as const;
+
 // In-memory settlement cache
 const settlementCache = new Map<string, { settled: boolean; txHash?: string; timestamp: number }>();
 setInterval(() => {
@@ -73,6 +90,34 @@ export async function POST(req: NextRequest) {
 
         const { from, to, value, validAfter, validBefore, nonce, v, r, s } = paymentData;
 
+        console.log("[x402/settle] Decoded:", safeStringify({ from, to, value, validAfter, validBefore, nonce, v }));
+
+        // Verify signature locally before hitting chain
+        try {
+            const signature = `${r}${s.slice(2)}${Number(v).toString(16).padStart(2, "0")}` as `0x${string}`;
+            const valid = await verifyTypedData({
+                address: from as `0x${string}`,
+                domain: EIP712_DOMAIN,
+                types: EIP712_TYPES,
+                primaryType: "TransferWithAuthorization",
+                message: {
+                    from: from as `0x${string}`,
+                    to: to as `0x${string}`,
+                    value: BigInt(value),
+                    validAfter: BigInt(validAfter),
+                    validBefore: BigInt(validBefore),
+                    nonce: nonce as `0x${string}`,
+                },
+                signature,
+            });
+            console.log("[x402/settle] Local sig valid:", valid);
+            if (!valid) {
+                return NextResponse.json({ success: false, error: "Signature verification failed locally" }, { status: 400 });
+            }
+        } catch (verifyErr: any) {
+            console.error("[x402/settle] Local verify error:", verifyErr.message);
+        }
+
         // Duplicate settlement protection
         const cacheKey = `${from}-${nonce}`;
         const cached = settlementCache.get(cacheKey);
@@ -87,6 +132,8 @@ export async function POST(req: NextRequest) {
             functionName: "authorizationState",
             args: [from as `0x${string}`, nonce as `0x${string}`],
         });
+
+        console.log("[x402/settle] Nonce used:", nonceUsed);
 
         if (nonceUsed) {
             settlementCache.set(cacheKey, { settled: true, timestamp: Date.now() });
@@ -119,6 +166,8 @@ export async function POST(req: NextRequest) {
             ],
         });
 
+        console.log("[x402/settle] TX submitted:", txHash);
+
         const receipt = await arcPublicClient.waitForTransactionReceipt({
             hash: txHash,
             confirmations: 1,
@@ -131,9 +180,9 @@ export async function POST(req: NextRequest) {
 
         settlementCache.set(cacheKey, { settled: true, txHash, timestamp: Date.now() });
 
-        // Save to DB for dashboard tracking
+        // Save to DB
         try {
-            await (db as any).x402Payment.create({
+            await db.x402Payment.create({
                 data: {
                     txHash,
                     payer: from.toLowerCase(),
@@ -145,7 +194,10 @@ export async function POST(req: NextRequest) {
                     settledAt: new Date(),
                 },
             });
-        } catch { }
+            console.log("[x402/settle] Saved to DB:", txHash);
+        } catch (dbErr: any) {
+            console.error("[x402/settle] DB save error:", dbErr.message);
+        }
 
         return NextResponse.json({
             success: true,
@@ -157,7 +209,6 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (err: any) {
-        // BigInt-safe error logging
         console.error("[x402/settle] Full error:", safeStringify(err));
         console.error("[x402/settle] Message:", err.message);
         console.error("[x402/settle] Cause:", typeof err.cause === "bigint" ? err.cause.toString() : String(err.cause ?? ""));
