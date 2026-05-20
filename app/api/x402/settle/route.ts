@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, recoverAddress, concat, toBytes } from "viem";
+import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, recoverAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
@@ -55,6 +55,28 @@ setInterval(() => {
     }
 }, 300_000);
 
+function buildDigest(
+    from: string, to: string, value: string,
+    validAfter: string, validBefore: string, nonce: string
+): `0x${string}` {
+    const structHash = keccak256(encodeAbiParameters(
+        parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
+        [
+            TRANSFER_TYPEHASH,
+            from as `0x${string}`,
+            to as `0x${string}`,
+            BigInt(value),
+            BigInt(validAfter),
+            BigInt(validBefore),
+            nonce as `0x${string}`,
+        ]
+    ));
+
+    // keccak256("\x19\x01" || DOMAIN_SEPARATOR || structHash)
+    const packed = `0x1901${DOMAIN_SEPARATOR.slice(2)}${structHash.slice(2)}` as `0x${string}`;
+    return keccak256(packed);
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -73,33 +95,31 @@ export async function POST(req: NextRequest) {
 
         const { from, to, value, validAfter, validBefore, nonce, v, r, s } = paymentData;
 
-        console.log("[x402/settle] Decoded:", safeStringify({ from, to, value, validAfter, validBefore, nonce, v, r, s }));
-
-        // Compute struct hash
-        const structHash = keccak256(encodeAbiParameters(
-            parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
-            [TRANSFER_TYPEHASH, from as `0x${string}`, to as `0x${string}`, BigInt(value), BigInt(validAfter), BigInt(validBefore), nonce as `0x${string}`]
-        ));
-
-        // Compute digest: keccak256(0x1901 || DOMAIN_SEPARATOR || structHash)
-        const digest = keccak256(concat([
-            toBytes("0x1901"),
-            toBytes(DOMAIN_SEPARATOR),
-            toBytes(structHash),
-        ]));
-
-        console.log("[x402/settle] Struct hash:", structHash);
-        console.log("[x402/settle] Digest:", digest);
-
-        // Recover signer from raw digest + signature
+        // Compute digest and recover signer — return in response for diagnosis
+        let diagInfo: any = {};
         try {
+            const digest = buildDigest(from, to, value, validAfter, validBefore, nonce);
             const fullSig = `${r}${s.slice(2)}${Number(v).toString(16).padStart(2, "0")}` as `0x${string}`;
             const recovered = await recoverAddress({ hash: digest, signature: fullSig });
-            console.log("[x402/settle] Expected from:", from.toLowerCase());
-            console.log("[x402/settle] Recovered addr:", recovered.toLowerCase());
-            console.log("[x402/settle] Match:", recovered.toLowerCase() === from.toLowerCase());
-        } catch (recoverErr: any) {
-            console.error("[x402/settle] Recover error:", recoverErr.message);
+            diagInfo = {
+                digest,
+                expectedFrom: from.toLowerCase(),
+                recoveredAddr: recovered.toLowerCase(),
+                sigMatch: recovered.toLowerCase() === from.toLowerCase(),
+            };
+        } catch (diagErr: any) {
+            diagInfo = { diagError: diagErr.message };
+        }
+
+        console.log("[x402/settle] Diag:", JSON.stringify(diagInfo));
+
+        // If signature doesn't recover to from, return early with diagnosis
+        if (diagInfo.sigMatch === false) {
+            return NextResponse.json({
+                success: false,
+                error: "Signature mismatch",
+                diag: diagInfo,
+            }, { status: 400 });
         }
 
         // Duplicate settlement protection
@@ -115,8 +135,6 @@ export async function POST(req: NextRequest) {
             functionName: "authorizationState",
             args: [from as `0x${string}`, nonce as `0x${string}`],
         });
-
-        console.log("[x402/settle] Nonce used:", nonceUsed);
 
         if (nonceUsed) {
             settlementCache.set(cacheKey, { settled: true, timestamp: Date.now() });
@@ -148,8 +166,6 @@ export async function POST(req: NextRequest) {
                 s as `0x${string}`,
             ],
         });
-
-        console.log("[x402/settle] TX submitted:", txHash);
 
         const receipt = await arcPublicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
 
@@ -188,9 +204,7 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (err: any) {
-        console.error("[x402/settle] Full error:", safeStringify(err));
-        console.error("[x402/settle] Message:", err.message);
-        console.error("[x402/settle] Cause:", typeof err.cause === "bigint" ? err.cause.toString() : String(err.cause ?? ""));
+        console.error("[x402/settle] Error:", safeStringify(err));
         return NextResponse.json({
             success: false,
             error: err.message ?? "Settlement failed",
