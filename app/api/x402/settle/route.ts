@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, toHex } from "viem";
+import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, recoverAddress, concat, toBytes } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const DOMAIN_SEPARATOR = "0x361191522483d32a83e70ae7183b4b9629442c13a78bc9921d6f707911c8c6b0" as `0x${string}`;
+const TRANSFER_TYPEHASH = "0x7c7c6cdb67a18743f49ec6fa9b35f50d52ed05cbed4cc592e13b44501c1a2267" as `0x${string}`;
 const FACILITATOR_PRIVATE_KEY = process.env.FORWARDER_PRIVATE_KEY as `0x${string}`;
 
 const safeStringify = (obj: any) =>
@@ -43,23 +45,8 @@ const EIP3009_ABI = [
         outputs: [{ name: "", type: "bool" }],
         stateMutability: "view",
     },
-    {
-        name: "TRANSFER_WITH_AUTHORIZATION_TYPEHASH",
-        type: "function",
-        inputs: [],
-        outputs: [{ name: "", type: "bytes32" }],
-        stateMutability: "view",
-    },
-    {
-        name: "DOMAIN_SEPARATOR",
-        type: "function",
-        inputs: [],
-        outputs: [{ name: "", type: "bytes32" }],
-        stateMutability: "view",
-    },
 ] as const;
 
-// In-memory settlement cache
 const settlementCache = new Map<string, { settled: boolean; txHash?: string; timestamp: number }>();
 setInterval(() => {
     const now = Date.now();
@@ -86,52 +73,33 @@ export async function POST(req: NextRequest) {
 
         const { from, to, value, validAfter, validBefore, nonce, v, r, s } = paymentData;
 
-        console.log("[x402/settle] Decoded:", safeStringify({ from, to, value, validAfter, validBefore, nonce, v }));
+        console.log("[x402/settle] Decoded:", safeStringify({ from, to, value, validAfter, validBefore, nonce, v, r, s }));
 
-        // Read on-chain type hash and domain separator for diagnosis
+        // Compute struct hash
+        const structHash = keccak256(encodeAbiParameters(
+            parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
+            [TRANSFER_TYPEHASH, from as `0x${string}`, to as `0x${string}`, BigInt(value), BigInt(validAfter), BigInt(validBefore), nonce as `0x${string}`]
+        ));
+
+        // Compute digest: keccak256(0x1901 || DOMAIN_SEPARATOR || structHash)
+        const digest = keccak256(concat([
+            toBytes("0x1901"),
+            toBytes(DOMAIN_SEPARATOR),
+            toBytes(structHash),
+        ]));
+
+        console.log("[x402/settle] Struct hash:", structHash);
+        console.log("[x402/settle] Digest:", digest);
+
+        // Recover signer from raw digest + signature
         try {
-            const [typeHash, domainSep] = await Promise.all([
-                arcPublicClient.readContract({
-                    address: USDC_ADDRESS as `0x${string}`,
-                    abi: EIP3009_ABI,
-                    functionName: "TRANSFER_WITH_AUTHORIZATION_TYPEHASH",
-                }),
-                arcPublicClient.readContract({
-                    address: USDC_ADDRESS as `0x${string}`,
-                    abi: EIP3009_ABI,
-                    functionName: "DOMAIN_SEPARATOR",
-                }),
-            ]);
-            console.log("[x402/settle] Contract TYPEHASH:", typeHash);
-            console.log("[x402/settle] Contract DOMAIN_SEP:", domainSep);
-
-            // Expected typehash for standard TransferWithAuthorization
-            const expectedTypeHash = keccak256(
-                new TextEncoder().encode(
-                    "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
-                )
-            );
-            console.log("[x402/settle] Expected TYPEHASH:", expectedTypeHash);
-            console.log("[x402/settle] TYPEHASH match:", typeHash === expectedTypeHash);
-
-            // Compute the struct hash
-            const structHash = keccak256(encodeAbiParameters(
-                parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
-                [typeHash, from as `0x${string}`, to as `0x${string}`, BigInt(value), BigInt(validAfter), BigInt(validBefore), nonce as `0x${string}`]
-            ));
-            console.log("[x402/settle] Struct hash:", structHash);
-
-            // Compute the digest
-            const digest = keccak256(
-                Buffer.concat([
-                    Buffer.from("1901", "hex"),
-                    Buffer.from(domainSep.slice(2), "hex"),
-                    Buffer.from(structHash.slice(2), "hex"),
-                ])
-            );
-            console.log("[x402/settle] Digest:", digest);
-        } catch (diagErr: any) {
-            console.error("[x402/settle] Diag error:", diagErr.message);
+            const fullSig = `${r}${s.slice(2)}${Number(v).toString(16).padStart(2, "0")}` as `0x${string}`;
+            const recovered = await recoverAddress({ hash: digest, signature: fullSig });
+            console.log("[x402/settle] Expected from:", from.toLowerCase());
+            console.log("[x402/settle] Recovered addr:", recovered.toLowerCase());
+            console.log("[x402/settle] Match:", recovered.toLowerCase() === from.toLowerCase());
+        } catch (recoverErr: any) {
+            console.error("[x402/settle] Recover error:", recoverErr.message);
         }
 
         // Duplicate settlement protection
@@ -141,7 +109,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, txHash: cached.txHash, duplicate: true });
         }
 
-        // Check nonce not already used on-chain
         const nonceUsed = await arcPublicClient.readContract({
             address: USDC_ADDRESS as `0x${string}`,
             abi: EIP3009_ABI,
@@ -184,10 +151,7 @@ export async function POST(req: NextRequest) {
 
         console.log("[x402/settle] TX submitted:", txHash);
 
-        const receipt = await arcPublicClient.waitForTransactionReceipt({
-            hash: txHash,
-            confirmations: 1,
-        });
+        const receipt = await arcPublicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
 
         if (receipt.status === "reverted") {
             settlementCache.delete(cacheKey);
@@ -196,7 +160,6 @@ export async function POST(req: NextRequest) {
 
         settlementCache.set(cacheKey, { settled: true, txHash, timestamp: Date.now() });
 
-        // Save to DB
         try {
             await db.x402Payment.create({
                 data: {
