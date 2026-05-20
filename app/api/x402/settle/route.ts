@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, keccak256, encodeAbiParameters, parseAbiParameters, recoverAddress } from "viem";
+import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const DOMAIN_SEPARATOR = "0x361191522483d32a83e70ae7183b4b9629442c13a78bc9921d6f707911c8c6b0" as `0x${string}`;
-const TRANSFER_TYPEHASH = "0x7c7c6cdb67a18743f49ec6fa9b35f50d52ed05cbed4cc592e13b44501c1a2267" as `0x${string}`;
 const FACILITATOR_PRIVATE_KEY = process.env.FORWARDER_PRIVATE_KEY as `0x${string}`;
 
 const safeStringify = (obj: any) =>
@@ -47,6 +45,7 @@ const EIP3009_ABI = [
     },
 ] as const;
 
+// In-memory settlement cache
 const settlementCache = new Map<string, { settled: boolean; txHash?: string; timestamp: number }>();
 setInterval(() => {
     const now = Date.now();
@@ -54,28 +53,6 @@ setInterval(() => {
         if (now - val.timestamp > 120_000) settlementCache.delete(key);
     }
 }, 300_000);
-
-function buildDigest(
-    from: string, to: string, value: string,
-    validAfter: string, validBefore: string, nonce: string
-): `0x${string}` {
-    const structHash = keccak256(encodeAbiParameters(
-        parseAbiParameters("bytes32, address, address, uint256, uint256, uint256, bytes32"),
-        [
-            TRANSFER_TYPEHASH,
-            from as `0x${string}`,
-            to as `0x${string}`,
-            BigInt(value),
-            BigInt(validAfter),
-            BigInt(validBefore),
-            nonce as `0x${string}`,
-        ]
-    ));
-
-    // keccak256("\x19\x01" || DOMAIN_SEPARATOR || structHash)
-    const packed = `0x1901${DOMAIN_SEPARATOR.slice(2)}${structHash.slice(2)}` as `0x${string}`;
-    return keccak256(packed);
-}
 
 export async function POST(req: NextRequest) {
     try {
@@ -95,33 +72,6 @@ export async function POST(req: NextRequest) {
 
         const { from, to, value, validAfter, validBefore, nonce, v, r, s } = paymentData;
 
-        // Compute digest and recover signer — return in response for diagnosis
-        let diagInfo: any = {};
-        try {
-            const digest = buildDigest(from, to, value, validAfter, validBefore, nonce);
-            const fullSig = `${r}${s.slice(2)}${Number(v).toString(16).padStart(2, "0")}` as `0x${string}`;
-            const recovered = await recoverAddress({ hash: digest, signature: fullSig });
-            diagInfo = {
-                digest,
-                expectedFrom: from.toLowerCase(),
-                recoveredAddr: recovered.toLowerCase(),
-                sigMatch: recovered.toLowerCase() === from.toLowerCase(),
-            };
-        } catch (diagErr: any) {
-            diagInfo = { diagError: diagErr.message };
-        }
-
-        console.log("[x402/settle] Diag:", JSON.stringify(diagInfo));
-
-        // If signature doesn't recover to from, return early with diagnosis
-        if (diagInfo.sigMatch === false) {
-            return NextResponse.json({
-                success: false,
-                error: "Signature mismatch",
-                diag: diagInfo,
-            }, { status: 400 });
-        }
-
         // Duplicate settlement protection
         const cacheKey = `${from}-${nonce}`;
         const cached = settlementCache.get(cacheKey);
@@ -129,6 +79,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: true, txHash: cached.txHash, duplicate: true });
         }
 
+        // Check nonce not already used on-chain
         const nonceUsed = await arcPublicClient.readContract({
             address: USDC_ADDRESS as `0x${string}`,
             abi: EIP3009_ABI,
@@ -167,7 +118,10 @@ export async function POST(req: NextRequest) {
             ],
         });
 
-        const receipt = await arcPublicClient.waitForTransactionReceipt({ hash: txHash, confirmations: 1 });
+        const receipt = await arcPublicClient.waitForTransactionReceipt({
+            hash: txHash,
+            confirmations: 1,
+        });
 
         if (receipt.status === "reverted") {
             settlementCache.delete(cacheKey);
@@ -176,6 +130,7 @@ export async function POST(req: NextRequest) {
 
         settlementCache.set(cacheKey, { settled: true, txHash, timestamp: Date.now() });
 
+        // Save to DB
         try {
             await db.x402Payment.create({
                 data: {
@@ -189,10 +144,7 @@ export async function POST(req: NextRequest) {
                     settledAt: new Date(),
                 },
             });
-            console.log("[x402/settle] Saved to DB:", txHash);
-        } catch (dbErr: any) {
-            console.error("[x402/settle] DB save error:", dbErr.message);
-        }
+        } catch { }
 
         return NextResponse.json({
             success: true,
