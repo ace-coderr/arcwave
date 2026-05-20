@@ -1,14 +1,14 @@
-// FILE: conduit/app/api/arc-stats/route.ts
-
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { arcPublicClient } from "@/lib/arcClient";
+import { decodeAbiParameters, parseAbiParameters, getAddress } from "viem";
 
 const PAYMENT_ADDRESS = "0x2d2eba8c0da5879ab25b5bd37e211d230aabbb5c";
 const PRICE = "1000"; // 0.001 USDC in atomic units (6 decimals)
 const NETWORK = "eip155:5042002";
 const FACILITATOR = "https://conduit-pay.vercel.app/api/x402";
 const USDC = "0x3600000000000000000000000000000000000000";
+const MAX_TX_AGE_SECONDS = 300;
 
 const paymentDetails = {
   scheme: "exact",
@@ -18,10 +18,17 @@ const paymentDetails = {
   description: "Live Arc Network and Conduit platform stats",
   mimeType: "application/json",
   payTo: PAYMENT_ADDRESS,
-  maxTimeoutSeconds: 300,
+  maxTimeoutSeconds: MAX_TX_AGE_SECONDS,
   asset: USDC,
   extra: { name: "USD Coin", version: "2" },
 };
+
+// In-memory cache of used tx hashes (prevents replay)
+const usedTxHashes = new Set<string>();
+setInterval(() => {
+  // Clear cache every 10 minutes — tx age check prevents abuse
+  usedTxHashes.clear();
+}, 600_000);
 
 function buildPaymentRequired() {
   const encoded = Buffer.from(JSON.stringify({ accepts: [paymentDetails] })).toString("base64");
@@ -63,7 +70,6 @@ function buildHumanPayPage() {
     .price-unit{font-size:13px;color:#5b8ff9;margin-left:4px;font-weight:700}
     .network-badge{font-size:10px;color:#a78bfa;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.2);border-radius:8px;padding:6px 12px;font-family:'IBM Plex Mono',monospace;font-weight:700}
     .data-preview{background:#0d0d0d;border:1px solid #1a1a1a;border-radius:10px;padding:16px;margin-bottom:24px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#555;line-height:1.8}
-    .data-preview span{color:#333}
     .data-preview .key{color:#5b8ff9}
     .data-preview .val{color:#888}
     .btn{width:100%;padding:14px;background:#00E5A0;border:none;border-radius:10px;color:#000;font-size:14px;font-weight:800;cursor:pointer;font-family:'Sora',sans-serif;margin-bottom:12px;transition:opacity .15s}
@@ -96,7 +102,7 @@ function buildHumanPayPage() {
     <div class="data-preview">
       <div><span class="key">"network"</span>: <span class="val">{ chainId: 5042002, blockNumber: "..." }</span></div>
       <div><span class="key">"conduit"</span>: <span class="val">{ totalVolume: "... USDC", escrows: {...} }</span></div>
-      <div><span class="key">"timestamp"</span>: <span class="val">"2026-05-17T..."</span></div>
+      <div><span class="key">"timestamp"</span>: <span class="val">"2026-05-20T..."</span></div>
     </div>
 
     <button class="btn" id="payBtn" onclick="connectAndPay()">Connect Wallet & Pay 0.001 USDC</button>
@@ -107,6 +113,27 @@ function buildHumanPayPage() {
   <p class="powered">Powered by <a href="https://conduit-pay.vercel.app">Conduit</a> · Built on Arc Network · Circle USDC</p>
 
   <script>
+  // ERC-20 transfer(address,uint256) selector + encoded args
+  function encodeTransfer(to, amount) {
+    const selector = '0xa9059cbb';
+    const paddedTo = to.slice(2).toLowerCase().padStart(64, '0');
+    const paddedAmount = BigInt(amount).toString(16).padStart(64, '0');
+    return selector + paddedTo + paddedAmount;
+  }
+
+  async function waitForReceipt(txHash, maxWait = 60000) {
+    const start = Date.now();
+    while (Date.now() - start < maxWait) {
+      const receipt = await window.ethereum.request({
+        method: 'eth_getTransactionReceipt',
+        params: [txHash],
+      });
+      if (receipt && receipt.status) return receipt;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    throw new Error('Transaction not confirmed within 60s');
+  }
+
   async function connectAndPay() {
     const btn = document.getElementById('payBtn');
     const status = document.getElementById('status');
@@ -150,68 +177,43 @@ function buildHumanPayPage() {
         }
       }
 
-      status.textContent = 'Building payment authorization...';
+      status.textContent = 'Confirm payment in MetaMask...';
 
       const USDC = '0x3600000000000000000000000000000000000000';
-      const to = '${PAYMENT_ADDRESS}';
-      const value = BigInt(1000);
-      const validAfter = BigInt(0);
-      const validBefore = BigInt(Math.floor(Date.now() / 1000) + 300);
-      const nonce = '0x' + [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
+      const PAYMENT_ADDRESS = '${PAYMENT_ADDRESS}';
+      const AMOUNT = '1000'; // 0.001 USDC
 
-      const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
-      const chainId = parseInt(chainIdHex, 16);
-
-      const domain = { name: 'USDC', version: '2', chainId, verifyingContract: USDC };
-      const types = {
-        TransferWithAuthorization: [
-          { name: 'from', type: 'address' },
-          { name: 'to', type: 'address' },
-          { name: 'value', type: 'uint256' },
-          { name: 'validAfter', type: 'uint256' },
-          { name: 'validBefore', type: 'uint256' },
-          { name: 'nonce', type: 'bytes32' },
-        ]
-      };
-      const message = {
-        from: account, to,
-        value: value.toString(),
-        validAfter: validAfter.toString(),
-        validBefore: validBefore.toString(),
-        nonce,
-      };
-
-      status.textContent = 'Sign in MetaMask to authorize payment...';
-
-      const signature = await window.ethereum.request({
-        method: 'eth_signTypedData_v4',
-        params: [account, JSON.stringify({ domain, types, primaryType: 'TransferWithAuthorization', message })],
+      // Direct ERC-20 transfer — no EIP-712 signing needed
+      const txHash = await window.ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: account,
+          to: USDC,
+          data: encodeTransfer(PAYMENT_ADDRESS, AMOUNT),
+        }],
       });
 
-      const sig = signature.slice(2);
-      const r = '0x' + sig.slice(0, 64);
-      const s = '0x' + sig.slice(64, 128);
-      const v = parseInt(sig.slice(128, 130), 16);
-
-      const paymentPayload = JSON.stringify({ from: account, to, value: value.toString(), validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce, v, r, s });
-      const encoded = btoa(paymentPayload);
+      status.textContent = 'Waiting for confirmation...';
+      await waitForReceipt(txHash);
 
       status.textContent = 'Verifying payment...';
 
+      // Send tx hash as payment proof
       const res = await fetch('/api/arc-stats', {
-        headers: { 'PAYMENT-SIGNATURE': encoded }
+        headers: { 'PAYMENT-SIGNATURE': 'tx:' + txHash }
       });
 
       if (res.ok) {
         const data = await res.json();
-        status.textContent = '✓ Payment verified! Here is your data:';
+        status.textContent = '✓ Payment confirmed! Here is your data:';
         status.className = 'status success';
         const resultEl = document.getElementById('result');
         resultEl.style.display = 'block';
         resultEl.textContent = JSON.stringify(data, null, 2);
         btn.textContent = '✓ Paid & Accessed';
       } else {
-        status.textContent = 'Payment verification failed. Try again.';
+        const err = await res.json().catch(() => ({}));
+        status.textContent = 'Verification failed: ' + (err.error || 'Try again.');
         status.className = 'status error';
         btn.disabled = false;
       }
@@ -221,7 +223,7 @@ function buildHumanPayPage() {
       btn.disabled = false;
     }
   }
-</script>
+  </script>
 </body>
 </html>`;
 
@@ -236,7 +238,66 @@ function buildHumanPayPage() {
   });
 }
 
-async function verifyPayment(paymentHeader: string): Promise<{ valid: boolean; error?: string }> {
+// Verify a tx-based payment (human flow) by checking the on-chain transfer
+async function verifyTxPayment(txHash: string): Promise<{ valid: boolean; payer?: string; error?: string }> {
+  try {
+    if (usedTxHashes.has(txHash.toLowerCase())) {
+      return { valid: false, error: "Transaction already used" };
+    }
+
+    const receipt = await arcPublicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
+    if (!receipt || receipt.status !== "success") {
+      return { valid: false, error: "Transaction failed or not found" };
+    }
+
+    // Check it was sent to USDC contract
+    if (receipt.to?.toLowerCase() !== USDC.toLowerCase()) {
+      return { valid: false, error: "Wrong contract" };
+    }
+
+    // Get tx to decode input data
+    const tx = await arcPublicClient.getTransaction({ hash: txHash as `0x${string}` });
+    if (!tx?.input || tx.input.length < 10) {
+      return { valid: false, error: "No input data" };
+    }
+
+    // Check transfer(address,uint256) selector: 0xa9059cbb
+    const selector = tx.input.slice(0, 10).toLowerCase();
+    if (selector !== "0xa9059cbb") {
+      return { valid: false, error: "Not a transfer call" };
+    }
+
+    // Decode (address to, uint256 amount)
+    const [recipient, amount] = decodeAbiParameters(
+      parseAbiParameters("address, uint256"),
+      `0x${tx.input.slice(10)}` as `0x${string}`
+    );
+
+    // Check recipient and amount
+    if (getAddress(recipient).toLowerCase() !== PAYMENT_ADDRESS.toLowerCase()) {
+      return { valid: false, error: `Wrong recipient: ${recipient}` };
+    }
+    if (amount < BigInt(PRICE)) {
+      return { valid: false, error: `Insufficient amount: ${amount} < ${PRICE}` };
+    }
+
+    // Check tx age
+    const block = await arcPublicClient.getBlock({ blockNumber: receipt.blockNumber });
+    const now = Math.floor(Date.now() / 1000);
+    const txAge = now - Number(block.timestamp);
+    if (txAge > MAX_TX_AGE_SECONDS) {
+      return { valid: false, error: `Transaction too old: ${txAge}s` };
+    }
+
+    usedTxHashes.add(txHash.toLowerCase());
+    return { valid: true, payer: tx.from };
+  } catch (err: any) {
+    return { valid: false, error: err.message };
+  }
+}
+
+// Verify EIP-3009 payment (AI agent flow)
+async function verifyAgentPayment(paymentHeader: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const res = await fetch(`${FACILITATOR}/verify`, {
       method: "POST",
@@ -272,6 +333,7 @@ async function settlePayment(paymentHeader: string): Promise<void> {
           maxAmountRequired: PRICE,
           payTo: PAYMENT_ADDRESS,
           asset: USDC,
+          resource: "https://conduit-pay.vercel.app/api/arc-stats",
         },
       }),
     });
@@ -283,15 +345,44 @@ export async function GET(req: NextRequest) {
   const acceptHeader = req.headers.get("accept") ?? "";
   const isHuman = acceptHeader.includes("text/html");
 
-  // No payment — show human pay page or machine 402
   if (!paymentSignature) {
     return isHuman ? buildHumanPayPage() : buildPaymentRequired();
   }
 
-  // Verify payment
-  const { valid } = await verifyPayment(paymentSignature);
-  if (!valid) {
-    return isHuman ? buildHumanPayPage() : buildPaymentRequired();
+  let payer: string | undefined;
+
+  // Detect payment type: tx-based (human) or EIP-3009 (agent)
+  if (paymentSignature.startsWith("tx:")) {
+    const txHash = paymentSignature.slice(3);
+    const { valid, payer: txPayer, error } = await verifyTxPayment(txHash);
+    if (!valid) {
+      console.log("[arc-stats] TX verify failed:", error);
+      return isHuman ? buildHumanPayPage() : buildPaymentRequired();
+    }
+    payer = txPayer;
+
+    // Save to DB for admin dashboard
+    try {
+      await db.x402Payment.create({
+        data: {
+          txHash,
+          payer: (payer ?? "unknown").toLowerCase(),
+          payTo: PAYMENT_ADDRESS.toLowerCase(),
+          amount: (parseInt(PRICE) / 1_000_000).toFixed(6),
+          network: NETWORK,
+          resource: "https://conduit-pay.vercel.app/api/arc-stats",
+          nonce: txHash, // use txHash as nonce for tx-based payments
+          settledAt: new Date(),
+        },
+      });
+    } catch { /* already saved or duplicate */ }
+
+  } else {
+    // EIP-3009 agent flow
+    const { valid } = await verifyAgentPayment(paymentSignature);
+    if (!valid) {
+      return isHuman ? buildHumanPayPage() : buildPaymentRequired();
+    }
   }
 
   // Fetch stats
@@ -333,7 +424,10 @@ export async function GET(req: NextRequest) {
     timestamp: new Date().toISOString(),
   };
 
-  settlePayment(paymentSignature);
+  // Settle EIP-3009 payment async (tx-based already settled on-chain)
+  if (!paymentSignature.startsWith("tx:")) {
+    settlePayment(paymentSignature);
+  }
 
   return NextResponse.json(responseData, {
     headers: {
