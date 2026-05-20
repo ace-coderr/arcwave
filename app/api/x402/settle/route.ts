@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, createWalletClient, http, getAddress } from "viem";
+import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { arcTestnet } from "@/lib/arcChain";
 import { db } from "@/lib/db";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 const FACILITATOR_PRIVATE_KEY = process.env.FORWARDER_PRIVATE_KEY as `0x${string}`;
+
+// BigInt-safe JSON serializer
+const safeStringify = (obj: any) =>
+    JSON.stringify(obj, (_, v) => (typeof v === "bigint" ? v.toString() : v), 2);
 
 const arcPublicClient = createPublicClient({
     chain: arcTestnet,
@@ -153,9 +157,14 @@ export async function POST(req: NextRequest) {
         });
 
     } catch (err: any) {
-        console.error("[x402/settle] Full error:", JSON.stringify(err, null, 2));
+        // BigInt-safe error logging
+        console.error("[x402/settle] Full error:", safeStringify(err));
         console.error("[x402/settle] Message:", err.message);
-        console.error("[x402/settle] Cause:", err.cause);
-        return NextResponse.json({ success: false, error: err.message ?? "Settlement failed", details: err.cause?.toString() }, { status: 500 });
+        console.error("[x402/settle] Cause:", typeof err.cause === "bigint" ? err.cause.toString() : String(err.cause ?? ""));
+        return NextResponse.json({
+            success: false,
+            error: err.message ?? "Settlement failed",
+            details: typeof err.cause === "bigint" ? err.cause.toString() : String(err.cause ?? ""),
+        }, { status: 500 });
     }
 }
